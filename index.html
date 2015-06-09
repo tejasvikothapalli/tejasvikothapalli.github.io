@@ -3,34 +3,110 @@
 	<head>
 		<title>Tejasvi Kothapalli</title>
 		<style>
-			h1 {
-			text-align:center;
-			color: brown;
-			font-family: verdana;
-			font-size: 300%;
-			}
-			p  {
-    		color:red;
-    		font-family:courier;
-    		font-size:100%;
-			}
+		    body {
+		        background-color:#00CC66;
+		        margin:0;
+		    }
+		    
+		    #topbar {
+		        background-color:green;
+		        height: 70px;
+		        width: 100%;
+		        position:fixed;
+		        z-index:2;
+		        color:grey;
+		        font-family: Tahoma, Geneva, sans-serif;
+		        font-size: 1.5em;		       
+		    }
+		    
+		    #topbar ul {
+		        list-style:none;
+		        margin:0;
+		        
+		    }
+		    
+		     #topbar li {
+		        float:right;
+		        padding:20.5px; 
+		        
+		    }
+		    
+		    #homebutton {
+		        float:left !important;
+		    }
+		    
+		    .fixedwidth {
+			    width: 1100px;
+			    margin: 0 auto;
+		    }
+		    
+		    #topbar li:hover {
+		        background-color: purple;
+		        cursor: pointer;
+                cursor: hand;
+		    }
+		    
+		    #topbar a
+		    {
+		        color:#122435;  
+		    }
+		    
+		    #selfpic {
+		        float:left;
+		        padding-top:100px; 
+		        border-right: 5px #122435 solid;
+		        padding-right: 75px;
+		    }
+		    
+		    .break {
+			    clear:both;
+		    }
+		    
+		    #nametitle {
+		        padding-top: 30px;
+		        float:left;
+		        color:grey;
+		        font-family:Impact, Charcoal, sans-serif;
+		        font-size: 7.5em;
+		        padding-left: 75px;
+		    
+		    }
+			
 		</style>
 	</head>
 
-	<body style="background-color:lightgrey">
-		<h1 style = "color:grey"; "font-size:300%"; >Tejasvi Kothapalli</h1>
-		<!-- <hr> -->
-		<p title="About W3Schools"><b>My name is <em>Tejasvi</em></b></p>
-		<a href="http://www.lhs.fuhsd.org/">Click here for my school's website</a>
-		<br>
-		<img src="http://upload.wikimedia.org/wikipedia/en/f/f2/Lynbrook_High_School_billboard.jpg" 
-		alt="sfdadsfasdfasdf" width="200" height="142">
-		<br>
-		<a href="http://lynbrookdeca.org/index.php">
-		Click here for Lynbrook DECA'S website</a>
-		<br>
-		<img src="https://yt3.ggpht.com/-o5xiCI7fs4s/AAAAAAAAAAI/AAAAAAAAAAA/y-8P9jmTHQ8/s900-c-k-no/photo.jpg" 
-		alt="sfdadsfasdfasdf" width="200" height="142">
+	<body >
+	    <div id = "topbar">
+	        <div class="fixedwidth">
+	            <ul>
+	                <a href="http://tejasvikothapalli.github.io/"><li id = "homebutton">Home</li></a>
+	                <a href="http://abhiramkothapalli.github.io/" target= "_blank"><li >Summary</li></a>
+	                <a href="http://abhiramkothapalli.github.io/" target= "_blank"><li>Skills</li></a>
+	                <a href="http://abhiramkothapalli.github.io/" target= "_blank"><li>Organizations</li></a>
+	                <a href="http://abhiramkothapalli.github.io/" target= "_blank"><li>Projects</li></a>
+	                <a href="http://abhiramkothapalli.github.io/" target= "_blank"><li>Contact</li></a>
+	            </ul>
+	        </div>
+	    </div>
+	    
+	    <div class= "break"></div>
+	        <div class="fixedwidth">
+	            <div id = "selfpic">
+	                <img src ="profile_picture.png" height="400"/>
+	            </div>
+	        
+	            <div id="nametitle">
+	                <p>Tejasvi<br>Kothapalli</p>
+	            
+	            </div>
+	        </div>
+	    <div class= "break"></div>
+	    
+	    <div class="bottombar">
+	        
+	    </div>   
+	     
+		
 	</body>
 
 </html>
