@@ -7,6 +7,8 @@
     } else {
         console.log("Geolocation is not supported by this browser.");
     }
+
+    
 console.log ("Hello");
 
 // var yelp = new Yelp({
