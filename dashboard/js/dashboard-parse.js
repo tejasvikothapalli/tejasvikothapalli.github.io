@@ -1,6 +1,6 @@
 // // Parse.initialize("kScQXRCZFHxkzilbr6loKIKO2hxt7lcKom9DWKRD", "R0gxChWChXhekNDydkGcxGCLfZndbw3H6dQSUHgr");
 Parse.initialize("DECA_APPLICATION_ID");
-Parse.serverURL = 'http://54.212.246.50:1337/parse';
+Parse.serverURL = 'https://54.212.246.50:1337/parse';
 
 // var object = new Parse.Object("DECAdiamonds");
 // alert (object);

@@ -130,7 +130,7 @@ self.addEventListener('message', function (evt) {
 // The user has clicked on the notification ...
 self.addEventListener('notificationclick', function(event) {
   // Android doesn’t close the notification when you click on it
-  // See: http://crbug.com/463146
+  // See: https://crbug.com/463146
   event.notification.close();
 
   if(event.notification.data && event.notification.data.click_url) {

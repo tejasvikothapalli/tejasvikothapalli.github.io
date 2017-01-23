@@ -5,7 +5,7 @@ This project shows how to use the Web Push Notifications API in a website, allow
 
 - Register to get your free Realtime Messaging application key at [https://accounts.realtime.co/signup/](https://accounts.realtime.co/signup/)
 
-- Create a Firebase Cloud Messaging project. [Follow this tutorial](http://messaging-public.realtime.co/documentation/starting-guide/mobilePushGCM.html).
+- Create a Firebase Cloud Messaging project. [Follow this tutorial](https://messaging-public.realtime.co/documentation/starting-guide/mobilePushGCM.html).
 
 - Open the `index.html` file and replace the Firebase initialization code shown below with the configuration code you got in the previous step:
 
@@ -30,7 +30,7 @@ This project shows how to use the Web Push Notifications API in a website, allow
 		  'messagingSenderId': '915139563807'
 		});
 
-- Map a webserver to folder where you have cloned this repository, open http://localhost/index.html in your Chrome/Firefox browser and try it out. If it doesn't work as expected have a look at the limitations and troubleshooting sections below.                           
+- Map a webserver to folder where you have cloned this repository, open https://localhost/index.html in your Chrome/Firefox browser and try it out. If it doesn't work as expected have a look at the limitations and troubleshooting sections below.                           
 		
 
 ## Limitations
@@ -45,7 +45,7 @@ This project shows how to use the Web Push Notifications API in a website, allow
 		Messaging: Please change your web app manifest's 'gcm_sender_id' value to '103953800507' to use Firebase messaging. (messaging/incorrect-gcm-sender-id).
 
 ### Not receiving push notifications		
-* Check that you are running the example from a webserver (e.g. http://localhost) and not from the file system (e.g. file:///C:/web/WebPushNotifications-master/index.html);
+* Check that you are running the example from a webserver (e.g. https://localhost) and not from the file system (e.g. file:///C:/web/WebPushNotifications-master/index.html);
 
 * Check that you have entered the right Firebase configurations;
 
