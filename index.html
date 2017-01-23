@@ -1,380 +1,173 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-	<title>Plan-It</title>
-	<link rel="stylesheet" type="text/css" href="demo.css">
 
-<!-- jQuery library -->
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.2/jquery.min.js"></script>
-</script>
-    <script async defer
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBtapG46SfKsgGbZ-ChRlMFCxI6vgwcJRM">
-    </script>
+  <meta charset="utf-8">
+  <title>Realtime Web Push Notifications example</title>
+  <meta name="description" content="This page demonstrates the use of the Realtime Web Push Notitications using GCM">
+  <meta name="author" content="Realtime">
 
-<!-- Latest compiled JavaScript -->
-<script src="http://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<script type="text/javascript" src="http://code.jquery.com/jquery-latest.min.js" ></script>
-<script type="text/javascript" src="tester.js" ></script>
+  <link href="//fonts.googleapis.com/css?family=Raleway:400,300,600" rel="stylesheet" type="text/css">
+
+  <link rel="stylesheet" href="css/normalize.css">
+  <link rel="stylesheet" href="css/skeleton.css">
+
+  
+  <link rel="icon" type="image/png" href="img/realtime-logo.jpg">
+
+  <!-- THESE ARE THE REQUIRED FILES TO USE WEB PUSH NOTIFICATIONS -->
+  <link rel="manifest" href="manifest.json">  
+  <script src="//messaging-public.realtime.co/js/2.1.0/ortc.js"></script>
+
+  
+  <!-- THESE FILES ARE ONLY REQUIRED FOR THE CURRENT EXAMPLE -->
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>  
+  <script src="index.js"></script>
 
 </head>
 <body>
-<i class="fa fa-search"></i>
-<div class = "head">
 
-	<h1 class="title">PlanIt</h1>
-	<h3 class = "heading">What do you need to do?</h3>
-</div>
-<!-- <div class="search" style="text-align:center;width:100%">
-	
-	<input class="box" type="text" name="search" placeholder="Search nearby events" style="margin-left:auto">
+  <!-- Firebase -->
+  <!-- ********************************************************
+       Update Firebase initialization code:
+          1. Go to the Firebase console: https://console.firebase.google.com/
+          2. Choose a Firebase project you've created
+          3. Click "Add Firebase to your web app"
+          4. Replace the following initialization code with the code from the Firebase console:
+  -->
+  <!-- START INITIALIZATION CODE -->
+  <script src="https://www.gstatic.com/firebasejs/3.6.6/firebase.js"></script>
+<script>
+  // Initialize Firebase
+  var config = {
+    apiKey: "AIzaSyBdf755F2RHw5-IUsMR1rYUyCGvpdvKSOk",
+    authDomain: "lynbrook-deca.firebaseapp.com",
+    databaseURL: "https://lynbrook-deca.firebaseio.com",
+    storageBucket: "lynbrook-deca.appspot.com",
+    messagingSenderId: "105997057044"
+  };
+  firebase.initializeApp(config);
+</script>
+  <!-- END INITIALIZATION CODE -->
+  
+  <script src="WebPushManager.js"></script>
 
-</div>
+  <div class="container">
+    <div class="row">
+      <div class="one-half column" style="margin-top: 2%">
 
+        <p>
+          <img src="img/realtime-large-logo.jpg" style="max-width: 90%">
+        </p>        
+        
+        <h1>Introducing Web Push Notifications</h1>
 
-<div class="col-md-6" id="options">
-	<img id = "left" src="C:\Users\Rohit\Downloads\SpaceMoney.png" style="height : 100px; width: 100px "> -->
-<!-- 	<img id = "center" src="C:\Users\Rohit\Downloads\SpaceFind.png" style="height : 100px; width: 100px "> -->
-<!-- 	<img id = "right" src="C:\Users\Rohit\Downloads\SpacePlan.png" style="height : 100px; width: 100px ">
+        <p>
+          Starting with Chrome 50 and Firefox 44 you are able to send push notifications to your website users, even when they are not browsing your website.
+        </p>
+        <p>
+          We have integrated this new feature into the Realtime Cloud Messaging Pub/Sub service to make your life easier.
+        </p>
 
-</div> -->
+        <h2>How?</h2>
 
-	<form id="msform" style = "width: 100%">
-			<!-- progressbar -->
-			<ul id="progressbar"  >
-				<li class="active">Step 1</li>
-				<li>Step 2</li>
-				<li>Step 3</li>
-				<li>Step 4</li>
-			</ul>
+        <p>
+            You probably noticed that your browser asked if you allowed notifications from this website. 
+            If you accepted you are already subscribed to your own private channel to receive notifications.            
+        </p>
 
-			<!-- fieldsets -->
-			<fieldset>
-				<h2 class="fs-title">What's your name?</h2>
-				<h3 class="fs-subtitle">Tell us who you are</h3>
-				<div id="wynmistakes" class="errormessages"></div>
-				<input type="text" name="firstname" placeholder="First Name" id="fname"/>
-				<input type="text" name="lastname" placeholder="Last Name" id="lname"/>
-				<input type="button" name="next" class="next1 action-button" value="Next" />
-			</fieldset>
-			<fieldset>
-				<h2 class="fs-title">Personal Information</h2>
-				<h3 class="fs-subtitle">We promise not to sell it</h3>
-				<div id="pimistakes" class="errormessages"></div>
-				<input type="tel" name="cellname" placeholder="Cell Phone (###-###-####)" id="cellphone"/>
-				<input type="number" name="grade" placeholder="Current grade (9-12)" id="currentgrade"/>
-				<input type="number" name="years" placeholder="Year in DECA (1-4)" id="yearindeca"/>
-				<input type="text" name="tshirt" placeholder="T-Shirt Size (Adult)" id="tshirtsize"/>
-				<input type="text" name="parentemail" placeholder="Parent Email" id="parentemail"/>
-				<input type="button" name="previous" class="previous action-button" value="Previous" />
-				<input type="button" name="next" class="next2 action-button" value="Next" />
-			</fieldset>
-			<fieldset>
-				<h2 class="fs-title">Account Details</h2>
-				<h3 class="fs-subtitle">How you will sign in</h3>
-				<div id="admistakes" class="errormessages"></div>
-				<input type="text" name="email" placeholder="Email" id="email"/>
-				<input type="password" name="password" placeholder="Password" id="password"/>
-				<input type="password" name="confirmpassword" placeholder="Confirm Password" id="confirmpassword"/>
-				<input type="button" name="previous" class="previous action-button" value="Previous" />
-				<input type="button" name="next" class="next3 action-button" value="Next" />
-			</fieldset>
-			<fieldset>
-				<h2 class="fs-title">Club Password</h2>
-				<h3 class="fs-subtitle">What's the magic word?</h3>
-				<div id="cpmistakes" class="errormessages"></div>
-				<input type="text" name="clubpassword" placeholder="Club Password" id="clubpassword"/>
-				<input type="button" name="previous" class="previous action-button" value="Previous" />
-				<input type="submit" name="submit" class="submit action-button" value="Submit" id ="signupsubmit"/>
-			</fieldset>
+        <p>
+          Your channel is: <code><span id="channel">...</span></code>
+        </p>
 
-		</form>
+        <p>
+            This was performed through the new <code>subscribeWithNotifications</code> method in the Realtime JavaScript SDK.
+        </p>
+        <p>
+            Demo time! Clicking on the following button will send a new push notification to your private channel (only you'll see the push).
+        </p>
 
+        <p>
+          <button id="sendButton" class="button-primary" onclick="javascript:send();">Send me a push notification</button>
+        </p>
 
-		<script>
-			var current_fs, next_fs, previous_fs; //fieldsets
-			var left, opacity, scale; //fieldset properties which we will animate
-			var animating; //flag to prevent quick multi-click glitches
-			var fnameok=false;
-			var lnameok=false;
-			var cellok=false;
-			var gradeok=false;
-			var yearindecaok=false;
-			var emailok=false;
-			var passwordsmatch=false;
-			var clubpasswordok=false;
-			var clubpassword="epicdiamonds"
-			var error1="";
-			var error2="";
-			var error3="";
-			var error4="";
-			$(".next1").click(function(event){
-				var error1="";
-				fnameok=false;
-				lnameok=false;
-				$("#wynmistakes").html(error1);
-				if ($("#fname").val()!="")
-				{
-					fnameok=true;
-				} else {
-					error1+="Please enter your first name.<br>";
-				}
-				if ($("#lname").val()!="")
-				{
-					lnameok=true;
-				} else {
-					error1+="Please enter your last name.<br>";
-				}
-				if (fnameok && lnameok) {
-					if(animating) return false;
-					animating = true;
-					current_fs = $(this).parent();
-					next_fs = $(this).parent().next();
-					
-					//activate next step on progressbar using the index of next_fs
-					$("#progressbar li").eq($("fieldset").index(next_fs)).addClass("active");
-					
-					//show the next fieldset
-					next_fs.show(); 
-					//hide the current fieldset with style
-					current_fs.animate({opacity: 0}, {
-						step: function(now, mx) {
-							//as the opacity of current_fs reduces to 0 - stored in "now"
-							//1. scale current_fs down to 80%
-							scale = 1 - (1 - now) * 0.2;
-							//2. bring next_fs from the right(50%)
-							left = (now * 50)+"%";
-							//3. increase opacity of next_fs to 1 as it moves in
-							opacity = 1 - now;
-							current_fs.css({'transform': 'scale('+scale+')'});
-							next_fs.css({'left': left, 'opacity': opacity});
-						}, 
-						duration: 800, 
-						complete: function(){
-							current_fs.hide();
-							animating = false;
-						}, 
-						//this comes from the custom easing plugin
-						easing: 'easeInOutBack'
-					});
-				} else {
-					error1+="<br>";
-					$("#wynmistakes").html(error1);
-				}
-			});
-			$(".next2").click(function(){
-				error2="";
-				cellok=false;
-				gradeok=false;
-				yearindecaok=false;
-				tshirtok=false;
-				parentemailok=false;
-				$("#pimistakes").html(error2);
-				function isvalidphonenumber(inputtxt)  
-				{  
-					var phoneno = new RegExp(/^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/);
-					var phonenoo = new RegExp(/^\d{10}$/);
-					if (phoneno.test(inputtxt)) {
-						return true;
-					} else if (phonenoo.test(inputtxt)) {
-						return true;
-					} else {
-						return false;
-					}
-				}
-				if (isvalidphonenumber($("#cellphone").val())) {
-					cellok=true;
-				} else {
-					error2+="Please enter a valid 10-digit phone number like ###-###-####.<br>"
-				}
+        <p>
+          You should see a Chrome or Firefox Push Notification pop-up like this near your system tray (the first push may take a little more time to be delivered due to the underlying Firebase Cloud Messaging backend configuration).          
+        </p>
+        </p>
 
-				if ($("#currentgrade").val() < 9 || $("#currentgrade").val() > 12) {
-					error2+="Your grade must be between 9 and 12.<br>"
-				} else {
-					gradeok=true;
-				}
-				if ($("#yearindeca").val() < 1 || $("#yearindeca").val() > 4) {
-					error2+="Your year in DECA must be between 1 and 4.<br>"
-				} else {
-					yearindecaok=true;
-				}
-				function isEmpty(str) {
-				    return (!str || 0 === str.length);
-				}
-				if (isEmpty($("#tshirtsize").val()))
-				{
-					error2+="Please enter a T-Shirt size.<br>"
-				} else {
-					tshirtok=true;
-				}
-				function isValidEmailAddress(emailAddress) {
-			    var pattern = new RegExp(/^((([a-z]|\d|[!#\$%&'\*\+\-\/=\?\^_`{\|}~]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])+(\.([a-z]|\d|[!#\$%&'\*\+\-\/=\?\^_`{\|}~]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])+)*)|((\x22)((((\x20|\x09)*(\x0d\x0a))?(\x20|\x09)+)?(([\x01-\x08\x0b\x0c\x0e-\x1f\x7f]|\x21|[\x23-\x5b]|[\x5d-\x7e]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(\\([\x01-\x09\x0b\x0c\x0d-\x7f]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))))*(((\x20|\x09)*(\x0d\x0a))?(\x20|\x09)+)?(\x22)))@((([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.)+(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.?$/i);
-			    return pattern.test(emailAddress);
-				};
-				if ( isValidEmailAddress($("#parentemail").val()) )
-				{
-					parentemailok=true;
-				} else {
-					error2+="Please enter a valid parent email address.<br>";
-				}
-				if (cellok && gradeok && yearindecaok && tshirtok && parentemailok) {
-					if(animating) return false;
-					animating = true;
-					current_fs = $(this).parent();
-					next_fs = $(this).parent().next();
-					
-					//activate next step on progressbar using the index of next_fs
-					$("#progressbar li").eq($("fieldset").index(next_fs)).addClass("active");
-					
-					//show the next fieldset
-					next_fs.show(); 
-					//hide the current fieldset with style
-					current_fs.animate({opacity: 0}, {
-						step: function(now, mx) {
-							//as the opacity of current_fs reduces to 0 - stored in "now"
-							//1. scale current_fs down to 80%
-							scale = 1 - (1 - now) * 0.2;
-							//2. bring next_fs from the right(50%)
-							left = (now * 50)+"%";
-							//3. increase opacity of next_fs to 1 as it moves in
-							opacity = 1 - now;
-							current_fs.css({'transform': 'scale('+scale+')'});
-							next_fs.css({'left': left, 'opacity': opacity});
-						}, 
-						duration: 800, 
-						complete: function(){
-							current_fs.hide();
-							animating = false;
-						}, 
-						//this comes from the custom easing plugin
-						easing: 'easeInOutBack'
-					});
-				} else {
-					error2+="<br>";
-					$("#pimistakes").html(error2);
-				}
-			});
-			$(".next3").click(function(){
-				error3="";
-				emailok=false;
-				passwordsmatch=false;
-				$("#admistakes").html(error3);
-				function isValidEmailAddress(emailAddress) {
-			    var pattern = new RegExp(/^((([a-z]|\d|[!#\$%&'\*\+\-\/=\?\^_`{\|}~]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])+(\.([a-z]|\d|[!#\$%&'\*\+\-\/=\?\^_`{\|}~]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])+)*)|((\x22)((((\x20|\x09)*(\x0d\x0a))?(\x20|\x09)+)?(([\x01-\x08\x0b\x0c\x0e-\x1f\x7f]|\x21|[\x23-\x5b]|[\x5d-\x7e]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(\\([\x01-\x09\x0b\x0c\x0d-\x7f]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))))*(((\x20|\x09)*(\x0d\x0a))?(\x20|\x09)+)?(\x22)))@((([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|\d|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.)+(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])|(([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])([a-z]|\d|-|\.|_|~|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])*([a-z]|[\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])))\.?$/i);
-			    return pattern.test(emailAddress);
-				};
-				if ( isValidEmailAddress($("#email").val()) )
-				{
-					emailok=true;
-				} else {
-					error3+="Please enter a valid email address.<br>";
-				}
-				if ($("#password").val()=="") {
-					error3+="Please enter a password.<br>";
-				} else if ($("#confirmpassword").val()=="") {
-					error3+="Please confirm your password.<br>";
-				} else if ($('#password').val() != $('#confirmpassword').val()) {
-					error3+="Your passwords don't match.<br>";
-				} else {
-					passwordsmatch=true;
-				}
-				if (emailok && passwordsmatch) {
-					if(animating) return false;
-					animating = true;
-					current_fs = $(this).parent();
-					next_fs = $(this).parent().next();
-					
-					//activate next step on progressbar using the index of next_fs
-					$("#progressbar li").eq($("fieldset").index(next_fs)).addClass("active");
-					
-					//show the next fieldset
-					next_fs.show(); 
-					//hide the current fieldset with style
-					current_fs.animate({opacity: 0}, {
-						step: function(now, mx) {
-							//as the opacity of current_fs reduces to 0 - stored in "now"
-							//1. scale current_fs down to 80%
-							scale = 1 - (1 - now) * 0.2;
-							//2. bring next_fs from the right(50%)
-							left = (now * 50)+"%";
-							//3. increase opacity of next_fs to 1 as it moves in
-							opacity = 1 - now;
-							current_fs.css({'transform': 'scale('+scale+')'});
-							next_fs.css({'left': left, 'opacity': opacity});
-						}, 
-						duration: 800, 
-						complete: function(){
-							current_fs.hide();
-							animating = false;
-						}, 
-						//this comes from the custom easing plugin
-						easing: 'easeInOutBack'
-					});
-				} else {
-					error3+="<br>";
-					$("#admistakes").html(error3);
-				}
-			});
+        <p>
+          <img src="img/chrome_webpush.png" style="max-width: 90%; border: solid lightgray 1px;">
+        </p>
 
-			$("#signupsubmit").click(function(event) {
-				event.preventDefault();
-				error4="";
-				clubpasswordok=false;
-				$("#cpmistakes").html(error4);
-				if ($('#clubpassword').val() != clubpassword) {
-					error4+="That isn't the club password.<br>";
-				} else {
-					clubpasswordok=true;
-					signupfunction();
-				}
-				if (!clubpasswordok) {
-					error4+="<br>";
-					$("#cpmistakes").html(error4);
-				}
-			});
+        <p>
+          or
+        </p>
 
-			$(".previous").click(function(){
-				if(animating) return false;
-				animating = true;
-				
-				current_fs = $(this).parent();
-				previous_fs = $(this).parent().prev();
-				
-				//de-activate current step on progressbar
-				$("#progressbar li").eq($("fieldset").index(current_fs)).removeClass("active");
-				
-				//show the previous fieldset
-				previous_fs.show(); 
-				//hide the current fieldset with style
-				current_fs.animate({opacity: 0}, {
-					step: function(now, mx) {
-						//as the opacity of current_fs reduces to 0 - stored in "now"
-						//1. scale previous_fs from 80% to 100%
-						scale = 0.8 + (1 - now) * 0.2;
-						//2. take current_fs to the right(50%) - from 0%
-						left = ((1-now) * 50)+"%";
-						//3. increase opacity of previous_fs to 1 as it moves in
-						opacity = 1 - now;
-						current_fs.css({'left': left});
-						previous_fs.css({'transform': 'scale('+scale+')', 'opacity': opacity});
-					}, 
-					duration: 800, 
-					complete: function(){
-						current_fs.hide();
-						animating = false;
-					}, 
-					//this comes from the custom easing plugin
-					easing: 'easeInOutBack'
-				});
-			});
+        <p>
+           <img src="img/firefox_webpush.png" style="max-width: 90%; border: solid lightgray 1px;">
+        </p>
+
+        <p>
+            This example uses a private channel for each user so you can send pushes at will, without annoying other users. A typical use case in a website would be using a global channel and subscribing each user to that channel. This way you could broadcast a single push to all users simultaneously. It´s powerful but should be used wisely.
+        </p>        
+
+      </div>
+      <div class="one-half column" style="margin-top: 10%">
+        <img style="max-width: 90%; " src="img/push2.gif">
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="row">
+      <div class="twelve column" style="margin-top: 2%">        
+
+        <h2>Cool! What if the user is not browsing the website when the push notification is sent?</h2>
+
+        <p>
+          No problem, if an instance of Chrome or Firefox is running users will see your notification pop-up inviting them back to your website. If Chrome or Firefox is not running the pop-up will be shown as soon as the browser is launched.
+        </p>
+
+        <p>
+          Let's try it. Copy the following curl command and <a href="https://github.com/realtime-framework/WebPushNotifications">navigate away</a> from this website. Paste the command in your terminal window and send yourself a push notification. When you receive it click on the pop-up and you'll be redirected to the Realtime homepage.
+        </p>
+
+        <p>          
+            <div id="curl" style="padding: 15px; background-color: black; color: white;">
+            </div>          
+        </p>
+
+        <p>
+          The command above is simply sending a Realtime message to your private channel (the C parameter) using the Realtime REST API. The Realtime server will take care of broadcasting it to Firebase Cloud Messaging for delivery.
+        </p>
+
+        <h2 style="padding-top: 10px;">One push, many platforms</h2>
+        <p>
+            But the good news won't stop here. Taking advantage of the Realtime Cloud Messaging integration with Firebase Cloud Messaging for Android devices and Apple Notification Services for iOS/OSX devices, now you'll be able to send one single push to your entire user base in almost all platforms. Until now you could only do it with native mobile apps, now you can do it also for your website users.
+        </p>
 
 
-		</script>
+        <h2 style="padding-top: 10px;">This is great! How can I get started?</h2>
+        <p>
+          You'll find this example source code and starting guide at <a href="https://github.com/realtime-framework/WebPushNotifications">https://github.com/realtime-framework/WebPushNotifications</a>
+        </p>
+
+        <p>
+          Feel free to clone it and run it in your localhost or website.
+        </p>
+
+        <p style="margin-bottom: 50px;">
+            Follow the guidelines and in less than one hour you'll be engaging with your website users. Go for it ...
+        </p>        
+
+      </div>
+    </div>
+  </div>
 
 </body>
-<!-- <div id="top">
-</div>
-<div id = "bottom">
-	 -->
-</div>
 </html>
+
+
