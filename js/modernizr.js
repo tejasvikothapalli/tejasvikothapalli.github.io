@@ -237,7 +237,7 @@ $('#loginbutton1').click(function(){
 // });
 });
 
-var i = 125;                     //  set your counter to 1
+var i = 25;                     //  set your counter to 1
 
 function myLoop (mydata) {           //  create a loop function
    setTimeout(function () {    //  call a 3s setTimeout when the loop is called
