@@ -172,32 +172,65 @@ $('input[type="submit"]').mouseup(function(){
 //   $(this).toggleClass('green');
 // });
 // $("#login-error-message").html("changing1");
-
+// alert ("hello");
 $('#loginbutton1').click(function(){
-  // alert("hello");
+  alert("hello");
     // $("#login-error-message").html("changing");
     $("#loginbutton").css('background', '#1C3484');
     var username = $("#loginuser").val();
     var password = $("#loginpass").val();
-    
-    Parse.User.logIn(username, password, {
-     success: function(user) {
-       // Do stuff after successful login.
-       // window.alert("success logging in");
-       // $("#login-error-message").html("success");
-       window.location.href='dashboard/dashboard.html';
 
-     },
-     error: function(user, error) {
-       // The login failed. Check error to see why.
-      
-       // alert("didnt work")
-       $("#login-error-message").html("Username or password do not match!");
+    firebase.auth().signInWithEmailAndPassword(username, password).then(function(user) {
+        window.location.href='a/index.html';
+    }).catch(function(error) {
+      $("#login-error-message").html("Username or password do not match!");
        $("#loginuser").val('');
        $("#loginpass").val('');
        $("#loginbutton").css('background', '#1F3A93');
-     }
-});
+    });
+    // var mydata = JSON.parse(data);
+    // for (i = 0; i < 1; i++) {
+    //   // Runs 5 times, with values of step 0 through 4.
+    //   // console.log(i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID)
+    //   // console.log(i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
+    //   //  setTimeout(function (mydata) {
+    //   //   // console.log(mydata[0].email);
+    //   //      alert('hello');
+    //   // }, 3000);
+    //   // firebase.auth().createUserWithEmailAndPassword(mydata[i].email, "DECA_" + mydata[i].studentID).then(function(){
+    //   // console.log(i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
+    //   // }).catch(function(error) {
+    //   //   // Handle Errors here.
+    //   //   var errorCode = error.code;
+    //   //   var errorMessage = error.message;
+    //   //   console.log(errorMessage);
+    //   //   // ...
+    //   // });
+    // //   // console.log(i);
+    // }
+    // alert(mydata[0].email);
+    // alert(mydata[0].age);
+
+    
+
+//     Parse.User.logIn(username, password, {
+//      success: function(user) {
+//        // Do stuff after successful login.
+//        // window.alert("success logging in");
+//        // $("#login-error-message").html("success");
+//        window.location.href='dashboard/dashboard.html';
+
+//      },
+//      error: function(user, error) {
+//        // The login failed. Check error to see why.
+      
+//        // alert("didnt work")
+//        $("#login-error-message").html("Username or password do not match!");
+//        $("#loginuser").val('');
+//        $("#loginpass").val('');
+//        $("#loginbutton").css('background', '#1F3A93');
+//      }
+// });
 });
 
 // $(document).mouseup(function (e)
