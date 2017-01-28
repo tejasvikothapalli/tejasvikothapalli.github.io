@@ -9,7 +9,7 @@
     var RealtimeAppKey = "89TbDX";
 
     // update the UI  
-    $('#curl').text('curl "https://ortc-developers-useast1-s0001.realtime.co/send" --data "AK=' + RealtimeAppKey + '&AT=SomeToken&C=' + channel + '&M=12345678_1-1_This is a web push notification sent using the Realtime REST API"');
+    $('#curl').text('curl "http://ortc-developers-useast1-s0001.realtime.co/send" --data "AK=' + RealtimeAppKey + '&AT=SomeToken&C=' + channel + '&M=12345678_1-1_This is a web push notification sent using the Realtime REST API"');
     $('#channel').text(channel);
       
     // start Web Push Manager to obtain device id and register it with Realtime
@@ -77,13 +77,12 @@ function S4() {
 // generate the user private channel and save it at the local storage
 // so we always use the same channel for each user
 function generateUserChannel(){
-  // userChannel = localStorage.getItem("channel");
-  // if (userChannel == null || userChannel == "null"){ 
-  //     guid = (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();               
-  //     userChannel = 'channel-' + 'cdbe7e0f-e77a-49b3-cc82-3a77a831b9c3';
-  //     localStorage.setItem("channel", userChannel);
-  // }
-  userChannel = 'channel-' + 'cdbe7e0f-e77a-49b3-cc82-3a77a831b9c3';
+  userChannel = localStorage.getItem("channel");
+  if (userChannel == null || userChannel == "null"){ 
+      guid = (S4() + S4() + "-" + S4() + "-4" + S4().substr(0,3) + "-" + S4() + "-" + S4() + S4() + S4()).toLowerCase();               
+      userChannel = 'channel-' + guid;
+      localStorage.setItem("channel", userChannel);
+  }
   return userChannel;
 }
 
