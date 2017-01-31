@@ -7,9 +7,9 @@ $("#forgot-pass-button").click(function(){
 
 
   var auth = firebase.auth();
-  var emailAddress = "user@example.com";
+  // var emailAddress = "user@example.com";
 
-  auth.sendPasswordResetEmail(emailAddress).then(function() {
+  auth.sendPasswordResetEmail(email).then(function() {
     ("#message").html("An email has been sent to your email address with instructions on how to change your password.");
 
     $("#message").css("color", "green");

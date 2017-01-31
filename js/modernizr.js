@@ -57,6 +57,9 @@ firebase.auth().onAuthStateChanged(function(user) {
     // console.log(user.email + " " + user.uid);
   } else {
     // No user is signed in.
+    $(".logbutton").css("display", "block");
+    $(".signbutton").css("display", "block");
+    $(".user-menu").css("display", "none");
   }
 });
 
