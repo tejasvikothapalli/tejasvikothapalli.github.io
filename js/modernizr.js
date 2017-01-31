@@ -25,33 +25,70 @@
 
 // // Parse.initialize("kScQXRCZFHxkzilbr6loKIKO2hxt7lcKom9DWKRD", "R0gxChWChXhekNDydkGcxGCLfZndbw3H6dQSUHgr");
 
-Parse.initialize("DECA_APPLICATION_ID");
-Parse.serverURL = 'https://54.212.246.50:1337/parse';
+// Parse.initialize("DECA_APPLICATION_ID");
+// Parse.serverURL = 'https://54.212.246.50:1337/parse';
 
 
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    // alert("you are logged in");
+    $(".logbutton").css("display", "none");
+    $(".signbutton").css("display", "none");
+    $(".user-menu").css("display", "block");
 
 
-var currentUser = Parse.User.current();
-if (currentUser) {
-    // alert("hidden");
-    // window.location.href='dashboard/dashboard.html';
+    // $(".user-name").html(" "+ user.firstname+" " + user.lastname +" ");
+    var userId = user.uid;
+    firebase.database().ref('/userData/' + userId).once('value').then(function(snapshot) {
+    var first = snapshot.val().firstname;
+    var last = snapshot.val().lastname;
+    $(".user-name").html(" "+first+ " " + last +" ");
+  });
 
-} else {
-    // alert("no log");
-}
+    //     alert("you are logged in " + user.uid);
+
+    //     var userId = firebase.auth().currentUser.uid;
+    //     firebase.database().ref('/userData/' + 'tejasvikothapalli@gmailcom').once('value').then(function(snapshot) {
+    //     var business = snapshot.val().businesscourse;
+    //     alert(business);
+
+    //     });
+
+    // console.log(user.email + " " + user.uid);
+  } else {
+    // No user is signed in.
+  }
+});
+
+// var currentUser = firebase.auth().currentUser;
+// alert(currentUser);
+// if (currentUser != null) {
+//     alert("hidden");
+//     // window.location.href='dashboard/dashboard.html';
+
+// } else {
+//     alert("no log");
+// }
 
 // alert("hello");
-if (currentUser) {
 
-        $(".logbutton").css("display", "none");
-        $(".signbutton").css("display", "none");
-        $(".user-menu").css("display", "block");
-        $(".user-name").html(" "+currentUser.get("firstname")+" " + currentUser.get("lastname") +" ");
-        // alert("you are logged in");
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    // User is signed in.
+    // alert ("hello")
+    
+  } else {
+    // No user is signed in.
+    $(".user-menu").css("display", "none");
+  }
+});
+if (currentUser != null) {
+
+        
         //window.location.href='dashboard.html';
 
     } else {
-        $(".user-menu").css("display", "none");
+        
         // alert("not logged in");
         
     }
@@ -115,7 +152,7 @@ function resizeWordBackground() {
     
 
 
-var currentUser = Parse.User.current();
+var currentUser = firebase.auth().currentUser;
 function signup_lace () {
   if (currentUser) {
          window.open("https://docs.google.com/forms/d/1n_q3cb-ajUU5GQkyqJ__fMJgly8Xm-_7JOPz6iIbG-w/viewform", '_blank');
@@ -140,16 +177,28 @@ function signup_sv () {
 $("#logout-button").click(function(){
   // alert("working");
 
-  Parse.User.logOut();
+  // Parse.User.logOut();
 
-  var currentUser = Parse.User.current();
+  // var currentUser = Parse.User.current();
+
+  firebase.auth().signOut().then(function() {
+   location.reload();
+    }, function(error) {
+    alert ("logout unsuccessful");
+  });
 
   // alert("Logged out");
-  location.reload();
+  
 
   // window.location.href='index.html';
 
 });
+
+// firebase.auth().signOut().then(function() {
+//    location.reload();
+//     }, function(error) {
+//     alert ("logout unsuccessful");
+//   });
 
 $("#loginpass").keyup(function(event){
     if(event.keyCode == 13){
@@ -174,22 +223,40 @@ $('input[type="submit"]').mouseup(function(){
 // $("#login-error-message").html("changing1");
 // alert ("hello");
 $('#loginbutton1').click(function(){
-  alert("hello");
+  // alert("hello");
     // $("#login-error-message").html("changing");
     $("#loginbutton").css('background', '#1C3484');
     var username = $("#loginuser").val();
     var password = $("#loginpass").val();
 
     // firebase.auth().signInWithEmailAndPassword(username, password).then(function(user) {
-    //     window.location.href='a/index.html';
+    //     alert("success");
+
+
     // }).catch(function(error) {
     //   $("#login-error-message").html("Username or password do not match!");
     //    $("#loginuser").val('');
     //    $("#loginpass").val('');
     //    $("#loginbutton").css('background', '#1F3A93');
     // });
-    var mydata = JSON.parse(data);
-    // for (i = 0; i < 1; i++) {
+
+
+
+    // var mydata = JSON.parse(data);
+    // for (i = 0; i < mydata.length; i++) {
+
+    firebase.auth().signInWithEmailAndPassword(username, password).then(function(user) {
+        
+        // console.log()
+
+        window.location.href='dashboard/dashboard.html';
+
+    }).catch(function(error) {
+      $("#login-error-message").html("Username or password do not match!");
+       $("#loginuser").val('');
+       $("#loginpass").val('');
+       $("#loginbutton").css('background', '#1F3A93');
+    });
       // Runs 5 times, with values of step 0 through 4.
         // console.log(i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID)
       //  setTimeout(function (mydata) {
@@ -197,7 +264,7 @@ $('#loginbutton1').click(function(){
       //      alert('hello');
       // }, 3000);
 
-      myLoop(mydata);
+      // myLoop(mydata);
 
       // firebase.auth().createUserWithEmailAndPassword(mydata[i].email, "DECA_" + mydata[i].studentID).then(function(){
       // console.log(i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
@@ -233,32 +300,32 @@ $('#loginbutton1').click(function(){
 //        $("#loginuser").val('');
 //        $("#loginpass").val('');
 //        $("#loginbutton").css('background', '#1F3A93');
-//      }
+     // }
 // });
 });
 
-var i = 25;                     //  set your counter to 1
+// var i = 25;                     //  set your counter to 1
 
-function myLoop (mydata) {           //  create a loop function
-   setTimeout(function () {    //  call a 3s setTimeout when the loop is called
+// function myLoop (mydata) {           //  create a loop function
+//    setTimeout(function () {    //  call a 3s setTimeout when the loop is called
 
-      // console.log(i+" success "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
-      firebase.auth().createUserWithEmailAndPassword(mydata[i].email, "DECA_" + mydata[i].studentID).then(function(){
-      console.log(i+" success "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
-      }).catch(function(error) {
-        // Handle Errors here.
-        var errorCode = error.code;
-        var errorMessage = error.message;
-        console.log( i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID +"\n"+ errorMessage);
-        // ...
-      });
-      //  your code here
-      i--;                     //  increment the counter
-      if (i >= 0) {            //  if the counter < 10, call the loop function
-         myLoop(mydata);             //  ..  again which will trigger another 
-      }                        //  ..  setTimeout()
-   }, 5000)
-}
+//       // console.log(i+" success "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
+//       firebase.auth().createUserWithEmailAndPassword(mydata[i].email, "DECA_" + mydata[i].studentID).then(function(){
+//       console.log(i+" success "+mydata[i].email + " " + "DECA_" + mydata[i].studentID);
+//       }).catch(function(error) {
+//         // Handle Errors here.
+//         var errorCode = error.code;
+//         var errorMessage = error.message;
+//         console.log( i+" "+mydata[i].email + " " + "DECA_" + mydata[i].studentID +"\n"+ errorMessage);
+//         // ...
+//       });
+//       //  your code here
+//       i--;                     //  increment the counter
+//       if (i >= 0) {            //  if the counter < 10, call the loop function
+//          myLoop(mydata);             //  ..  again which will trigger another 
+//       }                        //  ..  setTimeout()
+//    }, 5000)
+// }
 
 
 

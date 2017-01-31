@@ -1,20 +1,20 @@
 // // Parse.initialize("kScQXRCZFHxkzilbr6loKIKO2hxt7lcKom9DWKRD", "R0gxChWChXhekNDydkGcxGCLfZndbw3H6dQSUHgr");
-Parse.initialize("DECA_APPLICATION_ID");
-Parse.serverURL = 'https://54.212.246.50:1337/parse';
+// Parse.initialize("DECA_APPLICATION_ID");
+// Parse.serverURL = 'https://54.212.246.50:1337/parse';
 
 // var object = new Parse.Object("DECAdiamonds");
 // alert (object);
 
-var currentUser = Parse.User.current();
-if (currentUser) {
-		    // alert("you are logged in");
-		    $(".bodyDisplay").css("display", "block");
-		    $(".user-name").html(" "+currentUser.get("firstname")+ " " + currentUser.get("lastname") +" ");
+// var currentUser = Parse.User.current();
+// if (currentUser) {
+// 		    // alert("you are logged in");
+// 		    $(".bodyDisplay").css("display", "block");
+// 		    $(".user-name").html(" "+currentUser.get("firstname")+ " " + currentUser.get("lastname") +" ");
 
-		} else {
-		    // alert("not logged in");
-		    window.location.href='../index.html';
-		}
+// 		} else {
+// 		    // alert("not logged in");
+// 		    // window.location.href='../index.html';
+// 		}
 
 		$(window).resize(function() {
 
@@ -31,19 +31,39 @@ if (currentUser) {
             }
         });
 
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    // alert (user);
+    $(".bodyDisplay").css("display", "block");
+    var userId = user.uid;
+    // alert (userId);
+    firebase.database().ref('/userData/' + userId).once('value').then(function(snapshot) {
+    var first = snapshot.val().firstname;
+    var last = snapshot.val().lastname;
+    $(".user-name").html(" "+first+ " " + last +" ");
+});
+    
+    console.log(user.email + " " + user.uid);
+  } else {
+    // No user is signed in.
+    window.location.href='../index.html';
+  }
+});
 
 
 
 		$("#logout-button").click(function(){
 	// alert("working");
 
-	Parse.User.logOut();
-
-	var currentUser = Parse.User.current();
+	firebase.auth().signOut().then(function() {
+   location.reload();
+    }, function(error) {
+    alert ("logout unsuccessful");
+  });
 
 	// alert("Logged out");
 
-	window.location.href='../index.html';
+	// window.location.href='../index.html';
 
 });
 
@@ -357,29 +377,24 @@ if (currentUser) {
             });
 
 //Profile.html Java Script
-currentUser.fetch({
-	success: function(currentUser) {
-    // The object was refreshed successfully.
-},
-error: function(currentUser, error) {
-    // The object was not refreshed successfully.
-    // error is a Parse.Error with an error code and message.
-}
-});
 
 
-currentUser.fetch({
-	success: function(currentUser) {
-    // The object was refreshed successfully.
-},
-error: function(currentUser, error) {
-    // The object was not refreshed successfully.
-    // error is a Parse.Error with an error code and message.
-}
+
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    
+    // var userId = firebase.auth().currentUser.uid;
+    // firebase.database().ref('/userData/' + 'tejasvikothapalli@gmailcom').once('value').then(function(snapshot) {
+    // var business = snapshot.val().businesscourse;
+    // // alert(business);
+
+    
+    console.log(user.email + " " + user.uid);
+  } else {
+    // No user is signed in.
+    window.location.href='../index.html';
+  }
 });
-currentUser.fetch();
-currentUser.fetch();
-currentUser.fetch();currentUser.fetch();currentUser.fetch();currentUser.fetch();
 
 
 $(".profile-name").html(currentUser.get("firstname") +" " + currentUser.get("lastname") +"'s Profile");
