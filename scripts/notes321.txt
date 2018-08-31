@@ -1,0 +1,49 @@
+
+
+http://tejasvi.life/NASA redirects to nasa paper
+
+http://tejasvi.life/noauth redirects to web site ( works))
+
+http://54.213.239.41
+
+https://gist.github.com/fxsjy/5465353
+
+sudo systemctl stop apache2
+cd docs
+
+sudo python ../MultithreadedSimpleAuthServer.py 80 college:tejasvi >> ../logs.txt 2>&1
+OLD sudo python ../SimpleAuthServer.py 80 college:tejasvi >> ../logs.txt 2>&1
+
+
+
+TEST from mac or VM itself
+curl -u kothapalli:energy http://54.213.239.41/index.html | more
+
+
+
+
+ubuntu@ip-172-31-40-241:~$ curl ipinfo.io/73.170.233.154
+{
+  "ip": "73.170.233.154",
+  "hostname": "c-73-170-233-154.hsd1.ca.comcast.net",
+  "city": "San Jose",
+  "region": "California",
+  "country": "US",
+  "loc": "37.3394,-121.8950",
+  "org": "AS7922 Comcast Cable Communications, LLC",
+  "postal": "95156"
+}ubuntu@ip-172-31-40-241:~$
+
+
+
+-- OLD -----
+
+https://www.digitalocean.com/community/tutorials/how-to-set-up-password-authentication-with-apache-on-ubuntu-14-04
+
+sudo apt-get install apache2 apache2-utils
+
+Restart Apache to implement your changes:
+
+sudo systemctl restart apache2
+
+
