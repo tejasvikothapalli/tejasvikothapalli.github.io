@@ -12,7 +12,7 @@
       body {
         /* transform: scale(1);
         transform-origin: 0 0; */
-        zoom: 1.3
+        zoom: 1.15
         
       }
   </style>
@@ -117,6 +117,48 @@
           </tr>
         </tbody></table>
         <table style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;"><tbody>
+
+          <tr onmouseout="pupil_stop()" onmouseover="pupil_start()">
+            <td style="padding:20px;width:25%;vertical-align:middle">
+              <div class="one">
+                <!-- <div class="two" id='pupil_image'><img src="images/pupil_tracking_side_by_side.gif" width="160"></div> -->
+                <img src='images/pupil_tracking.png' width="160">
+              </div>
+              <script type="text/javascript">
+                function pupil_start() {
+                  document.getElementById('pupil_image').style.opacity = "1";
+                }
+
+                function pupil_stop() {
+                  document.getElementById('pupil_image').style.opacity = "0";
+                }
+                pupil_stop()
+              </script>
+            </td>
+            <td style="padding:20px;width:75%;vertical-align:middle">
+              <a href="">
+                <papertitle>Pupil Tracking: A Follow Up on B. Kowalski et al's Method</papertitle>
+              </a>
+              <br>
+              <strong>Tejasvi Kothapalli*</strong>,
+
+              <a href = 'https://optometry.berkeley.edu/research/clinical-research-center/crc-contacts/'>Andrew D. Graham</a>, 
+              <a href = 'https://optometry.berkeley.edu/research/clinical-research-center/crc-contacts/'>Tatyana Svitova</a>,
+              <a href = "https://vcresearch.berkeley.edu/faculty/meng-c-lin">Meng C. Lin</a>
+              <br>
+              <em></em> 2022
+              <br>
+              <!-- <a href="https://easytear-dev.github.io/">project page</a> /
+              <a href="http://www.cse.cuhk.edu.hk/~qdou/public/medneurips2022/140.pdf">paper</a> /
+              <a href="https://neurips.cc/media/PosterPDFs/NeurIPS%202022/63531.png?t=1669932150.7934783">poster</a> /
+              
+              <a href="https://docs.google.com/presentation/d/1S_VPrUFdYSddqJNQ4zFXWvZZghucO2bBMb7R-ai7FzA/edit?usp=sharing">slides</a> -->
+              <p></p>
+              <p>We improve and opensource B. Kowalski et al's method for the context of tear film lipid layer video. Specifically, we improve the thresholding, ellipse fitting, 
+                and implement the Kalman Filter. Special thanks to Bartek Kowalski and Prof. Alfredo Dubra for the discussions and advice.</p>
+            </td>
+          </tr>
+
           <tr onmouseout="meibography_stop()" onmouseover="meibography_start()">
             <td style="padding:20px;width:25%;vertical-align:middle">
               <div class="one">
