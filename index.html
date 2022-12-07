@@ -84,7 +84,7 @@
                 </script>
 
                 <p>I also love <a href = 'images/Tejas_boating.jpg' style="cursor: pointer;" onmouseover="toggle_dragon_boat()" onmouseout="toggle_me_img()">Dragon Boating</a>, 
-                  <a href = 'images/sohum_frisbee.JPG' style="cursor: pointer;" onmouseover="toggle_frisbee()" onmouseout="toggle_me_img()">Ultimate Frisbee</a>, Running, and 
+                  <a href = 'images/sohum_frisbee.jpg' style="cursor: pointer;" onmouseover="toggle_frisbee()" onmouseout="toggle_me_img()">Ultimate Frisbee</a>, Running, and 
                   <a href = 'images/lifting.png' style="cursor: pointer;" onmouseover="toggle_lifting()" onmouseout="toggle_me_img()">Power Lifting</a>.</p>
               </div>
 
@@ -121,8 +121,8 @@
           <tr onmouseout="pupil_stop()" onmouseover="pupil_start()">
             <td style="padding:20px;width:25%;vertical-align:middle">
               <div class="one">
-                <!-- <div class="two" id='pupil_image'><img src="images/pupil_tracking_side_by_side.gif" width="160"></div> -->
-                <img src='images/pupil_tracking.png' width="160">
+                <div class="two" id='pupil_image'><img src="images/ellipse_fitting.png" width="160"></div>
+                <img src='images/threshold.png' width="160">
               </div>
               <script type="text/javascript">
                 function pupil_start() {
@@ -146,7 +146,7 @@
               <a href = 'https://optometry.berkeley.edu/research/clinical-research-center/crc-contacts/'>Tatyana Svitova</a>,
               <a href = "https://vcresearch.berkeley.edu/faculty/meng-c-lin">Meng C. Lin</a>
               <br>
-              <em></em> 2022
+              <em>Open Source (Github)</em>, 2022
               <br>
               <!-- <a href="https://easytear-dev.github.io/">project page</a> /
               <a href="http://www.cse.cuhk.edu.hk/~qdou/public/medneurips2022/140.pdf">paper</a> /
@@ -200,7 +200,7 @@
 
 
 
-          <tr onmouseout="TFLL_tracking_stop()" onmouseover="TFLL_tracking_start()">
+          <tr id = "tffl" onmouseout="TFLL_tracking_stop()" onmouseover="TFLL_tracking_start()">
             <td style="padding:20px;width:25%;vertical-align:middle">
               <div class="one">
                 <div class="two" id='TFLL_image'><img src="images/TFLL_tracking.gif" width="160"></div>
@@ -318,81 +318,7 @@
             </td>
           </tr>
 
-          <tr onmouseout="sonic_stop()" onmouseover="sonic_start()">
-            <td style="padding:20px;width:25%;vertical-align:middle">
-              <div class="one">
-                <div class="two" id='sonic_image'><video  width=100% height=100% muted autoplay loop>
-                <source src="images/sonic_grid.mp4" type="video/mp4">
-                Your browser does not support the video tag.
-                </video></div>
-                <img id = "sonic_still" src='images/sonic.jpeg' width="160">
-              </div>
-              <script type="text/javascript">
-                function sonic_start() {
-                  document.getElementById('sonic_image').style.opacity = "1";
-                  document.getElementById('sonic_still').style.opacity = "0";
-                }
-
-                function sonic_stop() {
-                  document.getElementById('sonic_image').style.opacity = "0";
-                  document.getElementById('sonic_still').style.opacity = "1";
-                }
-                sonic_stop()
-              </script>
-            </td>
-            
-            <td style="padding:20px;width:75%;vertical-align:middle">
-              <a href="data/285_Final_Report.pdf">
-                <papertitle>CS 285 Final Report: Employing Recurrent Policies for Meta-Learning to Play Sonic The Hedgehog&trade;</papertitle>
-              </a>
-              <br>
-              Brian Zhu*, <strong>Tejasvi Kothapalli*</strong>
-              <br>
-              2021
-              <br>
-              <a href="data/285_Final_Report.pdf">Report</a>
-              <p></p>
-              <p>We approached <a href = "https://openai.com/blog/retro-contest/">Open AI's Retro contest</a> with two new approaches. We first explore meta-learning with recurrent policies. 
-                Second, we explored the use of enhanced exploration with Random Network Distillation.
-              </p>
-            </td>
-          </tr>
-
-          <tr onmouseout="latex_stop()" onmouseover="latex_start()">
-            <td style="padding:20px;width:25%;vertical-align:middle">
-              <div class="one">
-                <div class="two" id='latex_image'><img src='images/latex_markup_2.png' width="100%"></div>
-                <img id = "latex_still"  src='images/latex_equation_2.png' width="100%">
-              </div>
-              <script type="text/javascript">
-                function latex_start() {
-                  document.getElementById('latex_image').style.opacity = "1";
-                  document.getElementById('latex_still').style.opacity = "0";
-                }
-
-                function latex_stop() {
-                  document.getElementById('latex_image').style.opacity = "0";
-                  document.getElementById('latex_still').style.opacity = "1";
-                }
-                latex_stop()
-              </script>
-            </td>
-            
-            <td style="padding:20px;width:75%;vertical-align:middle">
-              <a href="data/194-80_Final_Report.pdf">
-                <papertitle>CS 190-80 Final Report: Converting Image Equation into Latex Markup</papertitle>
-              </a>
-              <br>
-              Brian Zhu*, <strong>Tejasvi Kothapalli*</strong>
-              <br>
-              2021
-              <br>
-              <a href="data/194-80_Final_Report.pdf">Report</a>
-              <p></p>
-              <p>We created a model that converts images of LaTeX into its original markup expression.
-              </p>
-            </td>
-          </tr>
+          
 
           <tr onmouseout="" onmouseover="">
             <td style="padding:20px;width:25%;vertical-align:middle">
@@ -416,7 +342,7 @@
             
             <td style="padding:20px;width:75%;vertical-align:middle">
               <a href="data/Saving-Energy-in-Homes-Using-Wi-Fi-Device-Usage-Patterns.pdf">
-                <papertitle>Saving-Energy-in-Homes-Using-Wi-Fi-Device-Usage-Patterns</papertitle>
+                <papertitle>Saving Energy in Homes Using Wi-Fi Device Usage Patterns</papertitle>
               </a>
               <br>
               <strong>Tejasvi Kothapalli</strong>
@@ -474,11 +400,194 @@
 
         </tbody></table>
 
-				<br><br><br>
+        <table style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;"><tbody>
+          <tr>
+            <td style="padding:20px;width:100%;vertical-align:middle">
+              <heading>Notable Coursework</heading>
+            </td>
+          </tr>
+        </tbody></table>
+
+        <table style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;"><tbody>
+
+          <tr onmouseout="compvis_stop()" onmouseover="compvis_start()">
+            <td style="padding:20px;width:25%;vertical-align:middle">
+              <div class="one">
+                <div class="two" id='280_image'><img src='images/clustering_iris.png' width="100%"></div>
+                <img id = "280_still"  src='images/parts_of_eye.jpeg' width="100%">
+              </div>
+              <script type="text/javascript">
+                function compvis_start() {
+                  document.getElementById('280_image').style.opacity = "1";
+                  document.getElementById('280_still').style.opacity = "0";
+                }
+
+                function compvis_stop() {
+                  document.getElementById('280_image').style.opacity = "0";
+                  document.getElementById('280_still').style.opacity = "1";
+                }
+                compvis_stop()
+              </script>
+            </td>
+            
+            <td style="padding:20px;width:75%;vertical-align:middle">
+              <a href="data/280_Final_Report.pdf">
+                <papertitle>CS 280 Final Report: Analyzing the Spread of the Tear Film Lipid Layer 
+                  with Patch Tracking
+                </papertitle>
+              </a>
+              <br>
+              <strong>Tejasvi Kothapalli</strong>
+              <br>
+              2022
+              <br>
+              <a href="data/280_Final_Report.pdf">Report</a> / 
+              <a href="https://docs.google.com/presentation/d/1ThEOQ5crKIe_aL7Q5VPH4Xh9GUNZGQ5Yl9XlgYQIKFs/edit?usp=sharing">Slides</a>
+
+              <p></p>
+              <p>This is a very preliminary version of <a href="#tffl">Tracking the Dynamics of the Tear Film Lipid Layer</a>.
+              </p>
+            </td>
+          </tr>
+
+          <tr onmouseout="sonic_stop()" onmouseover="sonic_start()">
+            <td style="padding:20px;width:25%;vertical-align:middle">
+              <div class="one">
+                <div class="two" id='sonic_image'><video  width=100% height=100% muted autoplay loop>
+                <source src="images/sonic_grid.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+                </video></div>
+                <img id = "sonic_still" src='images/sonic.jpeg' width="160">
+              </div>
+              <script type="text/javascript">
+                function sonic_start() {
+                  document.getElementById('sonic_image').style.opacity = "1";
+                  document.getElementById('sonic_still').style.opacity = "0";
+                }
+
+                function sonic_stop() {
+                  document.getElementById('sonic_image').style.opacity = "0";
+                  document.getElementById('sonic_still').style.opacity = "1";
+                }
+                sonic_stop()
+              </script>
+            </td>
+            
+            <td style="padding:20px;width:75%;vertical-align:middle">
+              <a href="data/285_Final_Report.pdf">
+                <papertitle>CS 285 Final Report: Employing Recurrent Policies for Meta-Learning to Play Sonic The Hedgehog&trade;</papertitle>
+              </a>
+              <br>
+              Brian Zhu*, <strong>Tejasvi Kothapalli*</strong>
+              <br>
+              2021
+              <br>
+              <a href="data/285_Final_Report.pdf">Report</a>
+              <p></p>
+              <p>We approached <a href = "https://openai.com/blog/retro-contest/">Open AI's Retro contest</a> with two new approaches. We first explore meta-learning with recurrent policies. 
+                Second, we explored the use of enhanced exploration with Random Network Distillation.
+              </p>
+            </td>
+          </tr>
+
+          
+
+          <tr onmouseout="latex_stop()" onmouseover="latex_start()">
+            <td style="padding:20px;width:25%;vertical-align:middle">
+              <div class="one">
+                <div class="two" id='latex_image'><img src='images/latex_markup_2.png' width="100%"></div>
+                <img id = "latex_still"  src='images/latex_equation_2.png' width="100%">
+              </div>
+              <script type="text/javascript">
+                function latex_start() {
+                  document.getElementById('latex_image').style.opacity = "1";
+                  document.getElementById('latex_still').style.opacity = "0";
+                }
+
+                function latex_stop() {
+                  document.getElementById('latex_image').style.opacity = "0";
+                  document.getElementById('latex_still').style.opacity = "1";
+                }
+                latex_stop()
+              </script>
+            </td>
+            
+            <td style="padding:20px;width:75%;vertical-align:middle">
+              <a href="data/194-80_Final_Report.pdf">
+                <papertitle>CS 190-80 Final Report: Converting Equation Image into Latex Markup</papertitle>
+              </a>
+              <br>
+              Brian Zhu*, <strong>Tejasvi Kothapalli*</strong>
+              <br>
+              2021
+              <br>
+              <a href="data/194-80_Final_Report.pdf">Report</a>
+              <p></p>
+              <p>We created a model that converts images of LaTeX into its original markup expression.
+              </p>
+            </td>
+          </tr>
+
+          <tr onmouseout="bert_stop()" onmouseover="bert_start()">
+            <td style="padding:20px;width:25%;vertical-align:middle">
+              <div class="one">
+                <div class="two" id='bert_image'><img src='images/bert_model.png' width="100%"></div>
+                <img id = "bert_still"  src='images/bert.jpeg' width="100%">
+              </div>
+              <script type="text/javascript">
+                function bert_start() {
+                  document.getElementById('bert_image').style.opacity = "1";
+                  document.getElementById('bert_still').style.opacity = "0";
+                }
+
+                function bert_stop() {
+                  document.getElementById('bert_image').style.opacity = "0";
+                  document.getElementById('bert_still').style.opacity = "1";
+                }
+                bert_stop()
+              </script>
+            </td>
+            
+            <td style="padding:20px;width:75%;vertical-align:middle">
+              <a href="data/182_Final_Report.pdf">
+                <papertitle>CS 182 Final Report: Understanding How Different Segments of a Yelp Review Affect
+                  Overall Star Rating Prediction with BERT
+                </papertitle>
+              </a>
+              <br>
+              <strong>Tejasvi Kothapalli*</strong>, Brian Zhu*, Joe Zou*
+              <br>
+              2021
+              <br>
+              <a href="data/182_Final_Report.pdf">Report</a>
+              <p></p>
+              <p>The intention of our technique was to understand how different segments in a review affect the overall prediction through sliding window methods. 
+                We hope that our contribution can help people better understand how these models make decisions.
+              </p>
+            </td>
+          </tr>
+
+          
+
+          
+          
+          
+
+        </tbody></table>
+
+				<!-- <br><br><br>
         <table width="100%" align="center" border="0" cellspacing="0" cellpadding="20"><tbody>
 
 
             <td>
+              <heading>Teaching</heading>
+            </td>
+          </tr>
+        </tbody></table> -->
+
+        <table style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;"><tbody>
+          <tr>
+            <td style="padding:20px;width:100%;vertical-align:middle">
               <heading>Teaching</heading>
             </td>
           </tr>
