@@ -159,16 +159,18 @@
           <tr onmouseout="meibography_stop()" onmouseover="meibography_start()">
             <td style="padding:20px;width:25%;vertical-align:middle">
               <div class="one">
-                <div class="two" id='meib_image'><img src="images/meib_prediction_chart.png" width="160"></div>
-                <img src='images/meib_pipeline.png' width="160">
+                <div class="two" id='meib_image'><img src="images/meib_eye.png" width="160"></div>
+                <img id = "meib_image2" src='images/meib_pipeline2.png' width="" height = "100%">
               </div>
               <script type="text/javascript">
                 function meibography_start() {
                   document.getElementById('meib_image').style.opacity = "1";
+                  document.getElementById('meib_image2').style.opacity = "0";
                 }
 
                 function meibography_stop() {
                   document.getElementById('meib_image').style.opacity = "0";
+                  document.getElementById('meib_image2').style.opacity = "1";
                 }
                 meibography_stop()
               </script>
