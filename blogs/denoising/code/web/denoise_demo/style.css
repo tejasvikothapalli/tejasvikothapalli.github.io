@@ -1,0 +1,53 @@
+@import url("../demo_theme.css");
+
+.grid {
+  /* Keep a fixed 2-column layout (matching denoise_wiener_demo sizing). */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Match denoise_wiener_demo panel size by capping overall width. */
+  max-width: calc(((var(--page-max) - 24px) / 3) * 1.4 + 12px);
+  margin: 0 auto;
+}
+
+/* Compact sizing for embed mode */
+.embed .page {
+  padding: 8px;
+}
+
+.embed .controls {
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.embed .panel {
+  padding: 6px;
+}
+
+.embed .panelTitle {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.embed .grid {
+  gap: 6px;
+}
+
+.embed button,
+.embed select {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+/* Pixelated scaling is great for image panels, but makes plot text look jaggy. */
+#origCanvas,
+#noisyCanvas,
+#estCanvas {
+  image-rendering: pixelated;
+}
+
+#specCanvas {
+  image-rendering: auto;
+}
+
+/* Keep sliders responsive, but never collapse the main panel grid into fewer columns. */
+
+

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>denoise demo (1/f^2 prior)</title>
+    <!-- Prevent /favicon.ico 404 noise -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>denoise demo</h1>
+          <p class="sub">Denoise an image using a 1/f<sup>2</sup> prior — runs fully client-side.</p>
+        </div>
+        <div class="status">
+          <div id="statusLine">Status: <span id="statusText">idle</span></div>
+          <div id="metricLine">
+            iter=<span id="iterText">0</span>,
+            E=<span id="energyText">0</span>,
+            fps=<span id="fpsText">0</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="controls">
+        <div class="controlsRow">
+          <button id="startBtn">Start</button>
+          <button id="pauseBtn" disabled>Pause</button>
+          <button id="resetBtn">Reset</button>
+          <label class="fileLabel">
+            Upload image
+            <input id="fileInput" type="file" accept="image/*" />
+          </label>
+          <select id="builtinSelect">
+            <option value="builtin:einstein">Use Einstein image</option>
+            <option value="builtin:gradient">Use synthetic gradient</option>
+          </select>
+        </div>
+
+        <div class="sliders">
+          <div class="slider">
+            <label for="sizeSel">size</label>
+            <select id="sizeSel">
+              <option value="128">128</option>
+              <option value="256" selected>256</option>
+              <option value="512">512</option>
+            </select>
+            <span></span>
+          </div>
+
+          <div class="slider">
+            <label for="snr">SNR</label>
+            <input id="snr" type="range" min="0.05" max="5" step="0.01" value="0.50" />
+            <span id="snrText">0.50</span>
+          </div>
+
+          <div class="slider">
+            <label for="eta">eta</label>
+            <input id="eta" type="range" min="0.001" max="1.0" step="0.001" value="0.100" />
+            <span id="etaText">0.100</span>
+          </div>
+
+          <div class="slider">
+            <label for="T">T (Langevin)</label>
+            <input id="T" type="range" min="0" max="5" step="0.01" value="1.00" />
+            <span id="TText">1.00</span>
+          </div>
+
+          <div class="slider">
+            <label for="itersPerFrame">iters/frame</label>
+            <input id="itersPerFrame" type="range" min="1" max="50" step="1" value="5" />
+            <span id="itersPerFrameText">5</span>
+          </div>
+
+          <div class="slider checkbox">
+            <label>
+              <input id="noiseEnabled" type="checkbox" checked />
+              enable noise term
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panelTitle">original</div>
+          <canvas id="origCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">noisy</div>
+          <canvas id="noisyCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">estimate</div>
+          <canvas id="estCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">power spectrum (radial avg)</div>
+          <canvas id="specCanvas" width="256" height="256"></canvas>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>Tip: open in a local server (not file://) so image loading works.</p>
+      </footer>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+
+

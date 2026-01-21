@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>denoise_weiner demo</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>denoise_weiner demo</h1>
+          <p class="sub">Closed-form Wiener-style denoising + spectra (client-side).</p>
+        </div>
+        <div class="status">
+          <div id="statusLine">Status: <span id="statusText">idle</span></div>
+        </div>
+      </header>
+
+      <section class="controls">
+        <div class="controlsRow">
+          <button id="resetBtn">Reset noise</button>
+          <label class="fileLabel">
+            Upload image
+            <input id="fileInput" type="file" accept="image/*" />
+          </label>
+          <select id="builtinSelect">
+            <option value="builtin:einstein">Use Einstein image</option>
+            <option value="builtin:gradient">Use synthetic gradient</option>
+          </select>
+          <div class="spacer"></div>
+          <div class="smallNote">Tip: sigma slider keeps noise fixed; Reset generates a new noise field.</div>
+        </div>
+
+        <div class="sliders">
+          <div class="slider">
+            <label for="sizeSel">size</label>
+            <select id="sizeSel">
+              <option value="128">128</option>
+              <option value="256" selected>256</option>
+              <option value="512">512</option>
+            </select>
+            <span></span>
+          </div>
+
+          <div class="slider sliderWide">
+            <label for="sigmaN">sigma_n</label>
+            <input id="sigmaN" type="range" min="0" max="1.5" step="0.01" value="0.05" />
+            <span id="sigmaNText">0.05</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panelTitle">original</div>
+          <canvas id="origCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle" id="noisyTitle">noisy</div>
+          <canvas id="noisyCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">reconstruction</div>
+          <canvas id="reconCanvas" width="256" height="256"></canvas>
+        </div>
+
+        <div class="panel">
+          <div class="panelTitle">attenuation</div>
+          <canvas id="attenCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">power spectrum (noisy)</div>
+          <canvas id="specNoisyCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">power spectrum (denoised)</div>
+          <canvas id="specDenoisedCanvas" width="256" height="256"></canvas>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>Serve over HTTP (not file://). See README.</p>
+      </footer>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+
+

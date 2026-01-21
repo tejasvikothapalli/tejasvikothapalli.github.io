@@ -1,1 +1,7 @@
 .DS_Store
+blogs/denoising/code/RePaint/
+blogs/denoising/code/model_zoo/
+blogs/denoising/code/deeplearning_denoise_cache/
+blogs/denoising/code/web/fillin_deeplearning_demo/big-lama.onnx
+*.pt
+*.pth

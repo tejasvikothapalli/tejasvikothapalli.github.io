@@ -1,0 +1,51 @@
+@import url("../demo_theme.css");
+
+.grid {
+  /* All panels in one row. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Compact sizing for embed mode */
+.embed .page {
+  padding: 8px;
+}
+
+.embed .controls {
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.embed .panel {
+  padding: 6px;
+}
+
+.embed .panelTitle {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.embed .grid {
+  gap: 6px;
+}
+
+.embed button,
+.embed select {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.slider.checkbox {
+  grid-template-columns: 1fr;
+}
+
+#origCanvas,
+#maskedCanvas,
+#estCanvas {
+  image-rendering: pixelated;
+}
+
+#specCanvas {
+  image-rendering: auto;
+}
+
+/* Keep sliders responsive, but never collapse the main panel grid into fewer columns. */

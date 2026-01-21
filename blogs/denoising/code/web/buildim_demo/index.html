@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>buildim demo (Fourier buildup)</title>
+    <!-- Prevent the browser from requesting /favicon.ico (and logging a 404). -->
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>buildim demo</h1>
+          <p class="sub">Build up an image one Fourier component at a time (client-side).</p>
+        </div>
+        <div class="status">
+          <div id="statusLine">Status: <span id="statusText">idle</span></div>
+          <div id="metricLine">fps=<span id="fpsText">0</span></div>
+        </div>
+      </header>
+
+      <section class="controls">
+        <div class="controlsRow">
+          <button id="startBtn">Play</button>
+          <button id="pauseBtn" disabled>Pause</button>
+          <button id="resetBtn">Reset</button>
+          <label class="fileLabel">
+            Upload image
+            <input id="fileInput" type="file" accept="image/*" />
+          </label>
+          <select id="builtinSelect">
+            <option value="builtin:einstein">Use Einstein image</option>
+            <option value="builtin:gradient">Use synthetic gradient</option>
+          </select>
+        </div>
+
+        <div class="sliders">
+          <div class="slider">
+            <label for="sizeSel">size</label>
+            <select id="sizeSel">
+              <option value="128">128</option>
+              <option value="256" selected>256</option>
+              <option value="512">512</option>
+            </select>
+            <span></span>
+          </div>
+
+          <div class="slider sliderWide">
+            <label for="kSlider">k (components)</label>
+            <input id="kSlider" type="range" min="0" max="1" step="1" value="0" />
+            <span id="kSliderText">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <!-- Row 1 (matches buildim.py: 2x3 subplots) -->
+        <div class="panel">
+          <div class="panelTitle">original</div>
+          <canvas id="origCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">reconstruction</div>
+          <canvas id="reconCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle" id="compTitle">i=0, a=0.00</div>
+          <canvas id="compCanvas" width="256" height="256"></canvas>
+        </div>
+
+        <!-- Row 2: (2,3,4) is unused in buildim.py; keep an empty spacer -->
+        <div class="panel panelEmpty"></div>
+        <div class="panel">
+          <div class="panelTitle"></div>
+          <canvas id="plotCanvas" width="256" height="256"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelTitle">full contrast</div>
+          <canvas id="fullCanvas" width="256" height="256"></canvas>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>Tip: open in a local server (not file://) so image loading works.</p>
+      </footer>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+
+

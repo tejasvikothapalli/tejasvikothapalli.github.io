@@ -1,0 +1,58 @@
+@import url("../demo_theme.css");
+
+.grid {
+  /* Keep a fixed 3-column layout (matches buildim.py: 2 rows x 3 cols with one empty slot). */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* (2,3,4) is intentionally empty to mirror buildim.py */
+.panelEmpty {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+/* Pixelated scaling is great for Fourier-component images, but makes plot text jaggy. */
+#origCanvas,
+#reconCanvas,
+#compCanvas,
+#fullCanvas {
+  image-rendering: pixelated;
+}
+
+#plotCanvas {
+  image-rendering: auto;
+}
+
+/* Keep all image panels the same displayed size; any anti-moiré scaling is handled in JS. */
+
+/* Compact sizing for embed mode */
+.embed .page {
+  padding: 8px;
+}
+
+.embed .controls {
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.embed .panel {
+  padding: 6px;
+}
+
+.embed .panelTitle {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.embed .grid {
+  gap: 6px;
+}
+
+.embed button,
+.embed select {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+

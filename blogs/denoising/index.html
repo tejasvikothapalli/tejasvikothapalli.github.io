@@ -1,0 +1,1347 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Denoising Images with Natural Scene Statistics</title>
+    <meta name="description" content="A walkthrough of how to use natural image statistics in order to denoise images using Bayesian inference." />
+
+    <!--
+      Self-contained template inspired by Transformer Circuits aesthetics.
+      Reference page: https://transformer-circuits.pub/2025/attribution-graphs/biology.html
+
+      Notes:
+      - No external fonts/CSS/JS.
+      - Uses system font stacks (fast, reliable on GitHub Pages).
+      - Replace placeholder text/sections with your own content.
+    -->
+
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="site">Your Site</div>
+          <div class="pipe">/</div>
+          <div class="section">Blog</div>
+        </div>
+        <nav class="topnav" aria-label="Site navigation">
+          <a href="../../index.html">Home</a>
+          <a href="../index.html">Blogs</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <p class="eyebrow">Denoising</p>
+      <h1>Denoising Images with Natural Scene Statistics</h1>
+      <p class="subtitle">
+        A walkthrough of how to use natural image statistics in order to denoise images using
+        Bayesian inference.
+      </p>
+
+      <section class="meta" aria-label="Post metadata">
+        <div class="meta-row">
+          <span class="k">Authors</span>
+          <span class="v authors">Tejasvi Kothapalli<sup>1</sup>, Bruno Olshausen<sup>1</sup></span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Affiliation</span>
+          <span class="v muted"><sup>1</sup> UC Berkeley Redwood Center for Theoretical Neuroscience</span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Published</span>
+          <span class="v">Jan 1, 2026</span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Tags</span>
+          <span class="v muted">
+            Denoising, Bayesian Inference, Natural Scenes, Fourier Transform, Steerable Pyramids,
+            Langevin Sampling, 1/f<sup>2</sup>, Wiener Filter
+          </span>
+        </div>
+      </section>
+
+      <div class="grid">
+        <!-- Section 1: intro + TOC (TOC sticky only within this section, so it stops before the demo). -->
+        <div class="grid-section">
+        <article class="prose">
+          <div class="callout">
+            <div class="label">Abstract</div>
+            <p>
+              Natural Images can be denoised using what we know about natural scene statistics.
+              Namely, natural images have a 1/f<sup>2</sup> power spectrum. Using this information as
+              our prior, we can use bayesian inference in order to denoise an image which has been
+              corrupted by gaussian noise. Using the same framework, we can also fill in an image
+              where 99% of the true pixel values are missing. Finally, we compare this simple
+              bayesian inference approach to modern AI methods for denoising and filling in.
+            </p>
+          </div>
+
+          <!-- Mobile-only TOC: shown right after the Abstract (non-sticky). -->
+          <aside class="toc toc-mobile toc-mobile-top" aria-label="Table of contents">
+            <h2>Contents</h2>
+            <ol class="toc-main">
+              <li><a href="#introduction">Introduction</a></li>
+              <li><a href="#natural-image-statistics">Natural image statistics (1/f<sup>2</sup>)</a></li>
+              <li><a href="#bayesian-denoising">Bayesian denoising</a></li>
+              <li><a href="#wavelet-coring">Wavelet coring</a></li>
+              <li><a href="#langevin-sampling">Langevin sampling</a></li>
+              <li><a href="#inpainting">Inpainting</a></li>
+              <li><a href="#comparison">Comparison</a></li>
+              <li><a href="#discussion">Discussion</a></li>
+            </ol>
+            <div class="divider"></div>
+            <ol class="toc-secondary">
+              <li><a href="#acknowledgments">Acknowledgments</a></li>
+              <li><a href="#citation-information">Citation Information</a></li>
+              <li><a href="#references">References</a></li>
+            </ol>
+          </aside>
+
+          <h2 id="introduction">Introduction</h2>
+          <p>
+            This blog will introduce and demonstrate how to use natural image statistics in order to
+            denoise an image. The first part will explore the 1/f<sup>2</sup> power spectrum of
+            natural images. The second part will discuss using bayesian inference in order to denoise
+            an image. The third part will implement Simoncelli et al.’s “NOISE REMOVAL VIA BAYESIAN
+            WAVELET CORING” in order to do denoising. The fourth part will discuss using gradient
+            descent with langevin sampling in order to denoise an image. The fifth part will
+            demonstrate filling in an image where a large percentage of pixels are missing. The
+            sixth and final part will compare these methods to standard deep learning techniques for
+            denoising and filling in.
+          </p>
+
+          <h2 id="natural-image-statistics">What do we know about natural images? (1/f<sup>2</sup> power spectrum)</h2>
+
+          <details class="fold fold-fourier">
+            <summary class="fold-summary">
+              <span class="fold-closed">Click here to expand Fourier transform explanation</span>
+              <span class="fold-open">Click here to hide Fourier transform explanation</span>
+            </summary>
+
+          <p>
+            Fourier's theorem was first proposed in 1807 but
+            not published until 1822 due to the skepticism of many leading mathematicians who did not
+            think it could be true. Today, it provides the theoretical foundation for the Fourier
+            transform which is one of the most widely used tools in all of science and engineering,
+            from radio astronomy and signal processing to neuroscience and modern machine learning.
+            For example, it is used for:
+          </p>
+
+          <ul>
+            <li>analyzing the frequency content of natural signals such as sound waveforms.</li>
+            <li>detecting rhythmic activity in brain signals - e.g., EEG, LFP and spike train recordings.</li>
+            <li>
+              even when there is no periodic structure - characterizing the length scale of correlations
+              over time or space, since the power spectrum is the Fourier transform of the auto-correlation
+              function.
+            </li>
+            <li>identifying the input-output relationship of linear systems.</li>
+          </ul>
+
+          <p>
+            Here we will experiment with Fourier decompositions of simple 1D waveforms and 2D images,
+            to gain some intuition about what the Fourier transform tells you about a signal, and how
+            it can be used to manipulate images to demonstrate perceptual phenomena.
+          </p>
+
+          <p>
+            Fourier's theorem states that any continuous function
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>
+            can be described as a weighted sum of sine and cosine waveforms at different frequencies:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Fourier theorem (sine + cosine form)">
+              <math display="block" aria-label="Fourier theorem (sine + cosine)">
+                <mrow>
+                  <mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo>
+                  <munderover>
+                    <mo>&#x2211;</mo>
+                    <mrow><mi>&#x03C9;</mi><mo>=</mo><mn>0</mn></mrow>
+                    <mi>&#x221E;</mi>
+                  </munderover>
+                  <mrow>
+                    <msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo>
+                    <mi>sin</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mi>x</mi><mo stretchy="false">)</mo>
+                    <mo>+</mo>
+                    <msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo>
+                    <mi>cos</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mi>x</mi><mo stretchy="false">)</mo>
+                  </mrow>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            where
+            <math aria-label="a_s(omega)"><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            and
+            <math aria-label="a_c(omega)"><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            are the weights of the sine and cosine components, respectively, and
+            <math aria-label="omega"><mi>&#x03C9;</mi></math>
+            is the frequency in
+            <math aria-label="2pi"><mn>2</mn><mi>&#x03C0;</mi></math>
+            radians per unit of
+            <math aria-label="x"><mi>x</mi></math>
+            (space or time). Alternatively if we define
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Amplitude and phase definitions">
+              <math display="block" aria-label="A(omega) definition">
+                <mrow>
+                  <mi>A</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo><mo>&#x2261;</mo>
+                  <msqrt>
+                    <mrow>
+                      <msup>
+                        <mrow><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow>
+                        <mn>2</mn>
+                      </msup>
+                      <mo>+</mo>
+                      <msup>
+                        <mrow><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow>
+                        <mn>2</mn>
+                      </msup>
+                    </mrow>
+                  </msqrt>
+                </mrow>
+              </math>
+
+              <math display="block" aria-label="phi(omega) definition">
+                <mrow>
+                  <mi>&#x03D5;</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo><mo>&#x2261;</mo>
+                  <msup><mi>tan</mi><mrow><mo>&#x2212;</mo><mn>1</mn></mrow></msup>
+                  <mrow>
+                    <mfrac>
+                      <mrow><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow>
+                      <mrow><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow>
+                    </mfrac>
+                  </mrow>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            we may rewrite the equation equivalently as
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Fourier theorem (amplitude + phase form)">
+              <math display="block" aria-label="Fourier theorem (amplitude + phase)">
+                <mrow>
+                  <mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo>
+                  <munderover>
+                    <mo>&#x2211;</mo>
+                    <mrow><mi>&#x03C9;</mi><mo>=</mo><mn>0</mn></mrow>
+                    <mi>&#x221E;</mi>
+                  </munderover>
+                  <mrow>
+                    <mi>A</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo>
+                    <mi>sin</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mi>x</mi><mo>+</mo><mi>&#x03D5;</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo>
+                  </mrow>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            where now
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>
+            is described simply as a sum of cosine waves, each with amplitude
+            <math aria-label="A(omega)"><mi>A</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            and phase-shifted by
+            <math aria-label="phi(omega)"><mi>&#x03D5;</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>.
+            We refer to
+            <em> <math aria-label="A(omega)"><mi>A</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math> </em>
+            as the <em>amplitude spectrum</em> and
+            <em> <math aria-label="phi(omega)"><mi>&#x03D5;</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math> </em>
+            as the <em>phase spectrum</em> of
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>.
+          </p>
+
+          <p>
+            To gain some intuition for the power and generality of the Fourier theorem, let us first
+            decompose a simple step-function this way. The function
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>
+            is
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Step function definition">
+              <math display="block" aria-label="Step function">
+                <mrow>
+                  <mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo>
+                  <mrow>
+                    <mo>{</mo>
+                    <mtable columnalign="left left" rowspacing="0.25em">
+                      <mtr>
+                        <mtd><mn>1</mn></mtd>
+                        <mtd>
+                          <mtext>for</mtext>
+                          <mi>x</mi><mo>&#x2265;</mo><mn>0</mn>
+                        </mtd>
+                      </mtr>
+                      <mtr>
+                        <mtd><mo>&#x2212;</mo><mn>1</mn></mtd>
+                        <mtd>
+                          <mtext>for</mtext>
+                          <mi>x</mi><mo>&lt;</mo><mn>0</mn>
+                        </mtd>
+                      </mtr>
+                    </mtable>
+                  </mrow>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            You are given <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math> as a
+            discretely sampled function. In the image below you can see that even though
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>
+            looks nothing like a sinusoid, we can nevertheless describe it perfectly by adding sinusoids
+            of different frequencies together, as long as they are given the correct amplitudes and phases.
+          </p>
+
+          <figure>
+            <img
+              src="images/step_function_fourier_transform.jpg"
+              alt="A step function decomposed into a sum of sinusoids of increasing frequency"
+              loading="lazy"
+            />
+            <figcaption>
+              A step function (black) reconstructed by summing sinusoids (colored) at increasing
+              frequencies.
+            </figcaption>
+          </figure>
+
+          <p>
+            The direct method of computing the amplitude and phase spectrum of a function
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>
+            is the Fourier transform! Looking back at the Fourier theorem, we can compute the Fourier
+            coefficients
+            <math aria-label="a_s(omega)"><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            and
+            <math aria-label="a_c(omega)"><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            from the discretely sampled function
+            <math aria-label="f-hat[n] equals f(n Delta x), n=0:N-1">
+              <mover><mi>f</mi><mo>^</mo></mover><mo>[</mo><mi>n</mi><mo>]</mo><mo>=</mo>
+              <mi>f</mi><mo stretchy="false">(</mo><mi>n</mi><mi>&#x0394;</mi><mi>x</mi><mo stretchy="false">)</mo><mo>,</mo>
+              <mi>n</mi><mo>=</mo><mn>0</mn><mo>:</mo><mi>N</mi><mo>&#x2212;</mo><mn>1</mn>
+            </math>
+            , as follows:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Discrete Fourier coefficients">
+              <math display="block" aria-label="Sine coefficients">
+                <mrow>
+                  <msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><msub><mi>&#x03C9;</mi><mi>k</mi></msub><mo stretchy="false">)</mo><mo>=</mo>
+                  <mfrac><mn>2</mn><mi>N</mi></mfrac>
+                  <munderover>
+                    <mo>&#x2211;</mo>
+                    <mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow>
+                    <mrow><mi>N</mi><mo>&#x2212;</mo><mn>1</mn></mrow>
+                  </munderover>
+                  <mrow>
+                    <mover><mi>f</mi><mo>^</mo></mover><mo>[</mo><mi>n</mi><mo>]</mo>
+                    <mi>sin</mi><mo stretchy="false">(</mo><msub><mi>&#x03C9;</mi><mi>k</mi></msub><mi>n</mi><mo stretchy="false">)</mo>
+                    <mi>&#x0394;</mi><mi>x</mi>
+                  </mrow>
+                </mrow>
+              </math>
+
+              <math display="block" aria-label="Cosine coefficients">
+                <mrow>
+                  <msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><msub><mi>&#x03C9;</mi><mi>k</mi></msub><mo stretchy="false">)</mo><mo>=</mo>
+                  <mfrac><mn>2</mn><mi>N</mi></mfrac>
+                  <munderover>
+                    <mo>&#x2211;</mo>
+                    <mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow>
+                    <mrow><mi>N</mi><mo>&#x2212;</mo><mn>1</mn></mrow>
+                  </munderover>
+                  <mrow>
+                    <mover><mi>f</mi><mo>^</mo></mover><mo>[</mo><mi>n</mi><mo>]</mo>
+                    <mi>cos</mi><mo stretchy="false">(</mo><msub><mi>&#x03C9;</mi><mi>k</mi></msub><mi>n</mi><mo stretchy="false">)</mo>
+                    <mi>&#x0394;</mi><mi>x</mi>
+                  </mrow>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            where
+            <math aria-label="omega_k equals 2 pi k over N, k=0:N/2">
+              <msub><mi>&#x03C9;</mi><mi>k</mi></msub><mo>=</mo><mn>2</mn><mi>&#x03C0;</mi>
+              <mi>k</mi><mo>/</mo><mi>N</mi><mo>,</mo>
+              <mi>k</mi><mo>=</mo><mn>0</mn><mo>:</mo><mi>N</mi><mo>/</mo><mn>2</mn>
+            </math>.
+            Intuitively, we can think of these equations as measuring the similarity between
+            <math aria-label="f-hat[n]"><mover><mi>f</mi><mo>^</mo></mover><mo>[</mo><mi>n</mi><mo>]</mo></math>
+            and the sine function, and the similarity between
+            <math aria-label="f-hat[n]"><mover><mi>f</mi><mo>^</mo></mover><mo>[</mo><mi>n</mi><mo>]</mo></math>
+            and the cosine function, for each frequency
+            <math aria-label="omega_k"><msub><mi>&#x03C9;</mi><mi>k</mi></msub></math>.
+          </p>
+
+          <p>
+            Formally, we can show this gives us exactly the Fourier coefficients
+            <math aria-label="a_s(omega)"><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            and
+            <math aria-label="a_c(omega)"><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            in the Fourier theorem by plugging the expression for
+            <math aria-label="f(x)"><mi>f</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></math>
+            into these equations and utilizing the orthogonality of sines and cosines of different
+            frequencies, or sine and cosine of the same frequency.
+          </p>
+
+          <p>
+            Once you have computed
+            <math aria-label="a_s(omega)"><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>
+            and
+            <math aria-label="a_c(omega)"><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></math>,
+            the amplitude spectrum and phase spectrum can be computed via
+            <math aria-label="A(omega) equals sqrt(a_c(omega)^2 + a_s(omega)^2)">
+              <mi>A</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo><mo>&#x2261;</mo>
+              <msqrt>
+                <mrow>
+                  <msup><mrow><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow><mn>2</mn></msup>
+                  <mo>+</mo>
+                  <msup><mrow><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow><mn>2</mn></msup>
+                </mrow>
+              </msqrt>
+            </math>
+            and
+            <math aria-label="phi(omega) equals tan inverse of a_c(omega) over a_s(omega)">
+              <mi>&#x03D5;</mi><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo><mo>&#x2261;</mo>
+              <msup><mi>tan</mi><mrow><mo>&#x2212;</mo><mn>1</mn></mrow></msup>
+              <mrow>
+                <mo stretchy="false">(</mo>
+                <mfrac>
+                  <mrow><msub><mi>a</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow>
+                  <mrow><msub><mi>a</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mi>&#x03C9;</mi><mo stretchy="false">)</mo></mrow>
+                </mfrac>
+                <mo stretchy="false">)</mo>
+              </mrow>
+            </math>.
+          </p>
+
+          <div class="fold-footer">
+            <button type="button" class="fold-hide" aria-label="Hide Fourier transform explanation">
+              Click here to hide Fourier transform explanation
+            </button>
+          </div>
+
+          </details>
+
+          <p>
+            A 2D image may also be described in terms of a Fourier decomposition as follows:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="2D Fourier decomposition">
+              <math display="block" aria-label="2D image decomposition">
+                <mrow>
+                  <mi>I</mi><mo stretchy="false">(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo stretchy="false">)</mo><mo>=</mo>
+                  <munderover>
+                    <mo>&#x2211;</mo>
+                    <mrow><msub><mi>&#x03C9;</mi><mi>x</mi></msub><mo>,</mo><msub><mi>&#x03C9;</mi><mi>y</mi></msub></mrow>
+                    <mrow></mrow>
+                  </munderover>
+                  <mrow>
+                    <mi>A</mi><mo stretchy="false">(</mo><msub><mi>&#x03C9;</mi><mi>x</mi></msub><mo>,</mo><msub><mi>&#x03C9;</mi><mi>y</mi></msub><mo stretchy="false">)</mo>
+                    <mi>sin</mi><mo stretchy="false">(</mo>
+                    <msub><mi>&#x03C9;</mi><mi>x</mi></msub><mi>x</mi>
+                    <mo>+</mo>
+                    <msub><mi>&#x03C9;</mi><mi>y</mi></msub><mi>y</mi>
+                    <mo>+</mo>
+                    <mi>&#x03D5;</mi><mo stretchy="false">(</mo><msub><mi>&#x03C9;</mi><mi>x</mi></msub><mo>,</mo><msub><mi>&#x03C9;</mi><mi>y</mi></msub><mo stretchy="false">)</mo>
+                    <mo stretchy="false">)</mo>
+                  </mrow>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            where
+            <math aria-label="omega_x"><msub><mi>&#x03C9;</mi><mi>x</mi></msub></math>
+            and
+            <math aria-label="omega_y"><msub><mi>&#x03C9;</mi><mi>y</mi></msub></math>
+            correspond to frequencies in the
+            <math aria-label="x"><mi>x</mi></math>
+            and
+            <math aria-label="y"><mi>y</mi></math>
+            dimensions of the image, respectively. Each sinewave component now corresponds to a 2D
+            grating of a specific spatial-frequency and orientation. You can use the demo below to
+            build up an image from its Fourier components, one component at a time.
+          </p>
+
+          <p>
+            Note how the amplitudes fall off with frequency. At some point, the amplitudes are so
+            small that the gratings are not even visible, yet they are clearly needed to reconstruct.
+            This seems paradoxical - gratings which are invisible in isolation nevertheless create
+            structure when combined. The squared amplitudes have a 1/f<sup>2</sup>
+            <a class="cite" href="#ref-field1987" data-ref="ref-field1987">[1]</a> fall off relationship,
+            which is shown in the dashed line. This phenomenon of 1/f power spectra is not unique to
+            natural images — it occurs all throughout nature such as in music
+            <a class="cite" href="#ref-voss1978" data-ref="ref-voss1978">[2]</a>.
+          </p>
+          </article>
+
+          <aside class="toc toc-top" aria-label="Table of contents">
+            <h2>Contents</h2>
+            <ol class="toc-main">
+              <li><a href="#introduction">Introduction</a></li>
+              <li><a href="#natural-image-statistics">Natural image statistics (1/f<sup>2</sup>)</a></li>
+              <li><a href="#bayesian-denoising">Bayesian denoising</a></li>
+              <li><a href="#wavelet-coring">Wavelet coring</a></li>
+              <li><a href="#langevin-sampling">Langevin sampling</a></li>
+              <li><a href="#inpainting">Inpainting</a></li>
+              <li><a href="#comparison">Comparison</a></li>
+              <li><a href="#discussion">Discussion</a></li>
+            </ol>
+            <div class="divider"></div>
+            <ol class="toc-secondary">
+              <li><a href="#acknowledgments">Acknowledgments</a></li>
+              <li><a href="#citation-information">Citation Information</a></li>
+              <li><a href="#references">References</a></li>
+            </ol>
+          </aside>
+        </div>
+
+        <!-- Full-width breakout demo (spans across the article + TOC columns). -->
+        <figure class="figure-fullbleed figure-1">
+            <div class="demo-embed">
+              <iframe
+              src="code/web/buildim_demo/?embed=1"
+                title="Fourier buildup demo"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              ></iframe>
+            </div>
+            <figcaption>
+              <strong>Figure 1.</strong> An interactive Fourier buildup: reconstruct an image by adding one Fourier component at a time.
+              <strong>Top middle panel</strong>: The cumulative reconstruction of the image after adding each oriented
+              frequency component.
+              <strong>Top right panel</strong>: The component number <em>i</em> is the frequency component we are adding
+              and <em>a</em> is the amplitude. As <em>i</em> goes up, <em>a</em> will go down because we are adding
+              frequencies in descending order of amplitude. Each grating is weighted by its associated amplitude.
+              Only components up to ~<em>i</em>=150 are visible and after that the grating is too hard to see because
+              the amplitude is so low.
+              <strong>Bottom right panel</strong>: The grating shown with full contrast to make it easier to see for
+              visualization purposes.
+              <strong>Bottom middle panel</strong>: The power spectrum of the image. The y-axis is the squared amplitude
+              of the frequency component, hence the power spectrum. The x-axis is the frequency value. Note the
+              log-log plot.
+              Source: <a href="code/buildim.py">Python</a>, <a href="code/buildim.m">MATLAB</a>.
+            </figcaption>
+          </figure>
+
+        <!-- Section 2a: Bayesian denoising intro + TOC (TOC reappears after the demo and stops before Figure 3). -->
+        <div class="grid-section">
+          <article class="prose">
+
+          <h2 id="bayesian-denoising">Bayesian denoising with a natural-image prior</h2>
+          <p>
+            If you want an incredible and easy-to-understand introduction to bayesian inference please read
+            <a href="https://redwood.berkeley.edu/wp-content/uploads/2018/08/Bayes-prob-generative.pdf">this write-up</a>
+            by Bruno Olshausen <a class="cite" href="#ref-olshausen2004" data-ref="ref-olshausen2004">[3]</a>.
+            We will use bayesian inference in order to denoise images. Let’s begin with the following problem
+            set-up (copied from the handout
+            <a href="https://redwood.berkeley.edu/wp-content/uploads/2018/08/Bayes-prob-generative.pdf">write-up</a>
+            <a class="cite" href="#ref-olshausen2004" data-ref="ref-olshausen2004">[3]</a>):
+            “A classic example of where Bayesian inference is employed is in the problem of estimation, where we must guess
+            the value of an underlying parameter from an observation that is corrupted by noise. Let’s say we have some
+            quantity in the world,
+            <math aria-label="x"><mi>x</mi></math>,
+            and our observation of this quantity,
+            <math aria-label="y"><mi>y</mi></math>,
+            is corrupted by additive Gaussian noise,
+            <math aria-label="n"><mi>n</mi></math>,
+            with zero mean:”
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Observation model">
+              <math display="block" aria-label="y equals x plus n">
+                <mrow>
+                  <mi>y</mi><mo>=</mo><mi>x</mi><mo>+</mo><mi>n</mi>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            Our job is to make the best guess as to the value of
+            <math aria-label="x"><mi>x</mi></math>
+            given the observed value
+            <math aria-label="y"><mi>y</mi></math>.
+            Let’s call our best guess
+            <math aria-label="x-hat"><mover><mi>x</mi><mo>^</mo></mover></math>.
+            In this set-up, when
+            <math aria-label="x distributed as Normal(mu_x, sigma_x^2)">
+              <mi>x</mi><mo>&#x223C;</mo><mi>N</mi><mo stretchy="false">(</mo><msub><mi>&#x03BC;</mi><mi>x</mi></msub><mo>,</mo>
+              <msubsup><mi>&#x03C3;</mi><mi>x</mi><mn>2</mn></msubsup><mo stretchy="false">)</mo>
+            </math>
+            and
+            <math aria-label="n distributed as Normal(mu_n, sigma_n^2)">
+              <mi>n</mi><mo>&#x223C;</mo><mi>N</mi><mo stretchy="false">(</mo><msub><mi>&#x03BC;</mi><mi>n</mi></msub><mo>,</mo>
+              <msubsup><mi>&#x03C3;</mi><mi>n</mi><mn>2</mn></msubsup><mo stretchy="false">)</mo>
+            </math>
+            are both gaussian, there is a standard closed-form solution for
+            <math aria-label="x-hat"><mover><mi>x</mi><mo>^</mo></mover></math>.
+            This is also known as the Wiener filter:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Wiener estimator">
+              <math display="block" aria-label="x-hat equals (sigma_x^2 y + sigma_n^2 mu_x)/(sigma_x^2 + sigma_n^2)">
+                <mrow>
+                  <mover><mi>x</mi><mo>^</mo></mover><mo>=</mo>
+                  <mfrac>
+                    <mrow>
+                      <msubsup><mi>&#x03C3;</mi><mi>x</mi><mn>2</mn></msubsup><mi>y</mi>
+                      <mo>+</mo>
+                      <msubsup><mi>&#x03C3;</mi><mi>n</mi><mn>2</mn></msubsup>
+                      <msub><mi>&#x03BC;</mi><mi>x</mi></msub>
+                    </mrow>
+                    <mrow>
+                      <msubsup><mi>&#x03C3;</mi><mi>x</mi><mn>2</mn></msubsup>
+                      <mo>+</mo>
+                      <msubsup><mi>&#x03C3;</mi><mi>n</mi><mn>2</mn></msubsup>
+                    </mrow>
+                  </mfrac>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            Now assume
+            <math aria-label="mu_x equals 0"><msub><mi>&#x03BC;</mi><mi>x</mi></msub><mo>=</mo><mn>0</mn></math>
+            and
+            <math aria-label="sigma_x equals 1.0"><msub><mi>&#x03C3;</mi><mi>x</mi></msub><mo>=</mo><mn>1.0</mn></math>.
+            Then
+            <math aria-label="x-hat"><mover><mi>x</mi><mo>^</mo></mover></math>
+            simplifies to the following form:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Attenuation form">
+              <math display="block" aria-label="x-hat equals a y">
+                <mrow>
+                  <mover><mi>x</mi><mo>^</mo></mover><mo>=</mo><mi>a</mi><mi>y</mi>
+                </mrow>
+              </math>
+              <math display="block" aria-label="a equals sigma_x^2/(sigma_x^2 + sigma_n^2)">
+                <mrow>
+                  <mi>a</mi><mo>=</mo>
+                  <mfrac>
+                    <msubsup><mi>&#x03C3;</mi><mi>x</mi><mn>2</mn></msubsup>
+                    <mrow>
+                      <msubsup><mi>&#x03C3;</mi><mi>x</mi><mn>2</mn></msubsup>
+                      <mo>+</mo>
+                      <msubsup><mi>&#x03C3;</mi><mi>n</mi><mn>2</mn></msubsup>
+                    </mrow>
+                  </mfrac>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            <math aria-label="a"><mi>a</mi></math>
+            is an attenuation factor between 0 and 1.
+            <math aria-label="a"><mi>a</mi></math>
+            varies with
+            <math aria-label="sigma_n"><msub><mi>&#x03C3;</mi><mi>n</mi></msub></math>
+            as shown in the plot below:
+          </p>
+
+          <figure class="figure-2">
+            <img
+              src="images/sigma_n_vs_a.png"
+              alt="Plot showing attenuation factor a as a function of noise standard deviation sigma_n"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Figure 2.</strong> Attenuation factor
+              <math aria-label="a"><mi>a</mi></math>
+              as a function of
+              <math aria-label="sigma_n"><msub><mi>&#x03C3;</mi><mi>n</mi></msub></math>.
+            </figcaption>
+          </figure>
+
+          <p>
+            Now let's apply the same framework to the problem of denoising an image. We are given a noisy observation
+            <math aria-label="I(x-vector)"><mi>I</mi><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo></math>
+            of an image
+            <math aria-label="I_0(x-vector)"><msub><mi>I</mi><mn>0</mn></msub><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo></math>
+            as follows:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Image observation model">
+              <math display="block" aria-label="I(x) equals I_0(x) plus n(x)">
+                <mrow>
+                  <mi>I</mi><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo><mo>=</mo>
+                  <msub><mi>I</mi><mn>0</mn></msub><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                  <mo>+</mo>
+                  <mi>n</mi><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            where
+            <math aria-label="x-vector"><mover><mi>x</mi><mo>&#x2192;</mo></mover></math>
+            denotes the pixel position within the 2D image. Our task is to estimate
+            <math aria-label="I_0"><msub><mi>I</mi><mn>0</mn></msub></math>
+            from
+            <math aria-label="I"><mi>I</mi></math>.
+            We could do this pixel by pixel, but since the signal and noise variance is the same for each pixel all it will
+            do is attenuate the entire image, which isn't very interesting. However if we transform to the frequency domain
+            we can exploit our prior knowledge about the statistics of natural images - namely, they have 1/f<sup>2</sup>
+            power spectra!
+          </p>
+
+          <p>
+            Letting
+            <math aria-label="I-tilde(f-vector)"><mover><mi>I</mi><mo>~</mo></mover><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo></math>
+            denote the Fourier transform of
+            <math aria-label="I(x-vector)"><mi>I</mi><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo></math>,
+            we have
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Frequency-domain observation model">
+              <math display="block" aria-label="I-tilde equals I0-tilde plus n-tilde">
+                <mrow>
+                  <mover><mi>I</mi><mo>~</mo></mover><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo><mo>=</mo>
+                  <mover><msub><mi>I</mi><mn>0</mn></msub><mo>~</mo></mover><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                  <mo>+</mo>
+                  <mover><mi>n</mi><mo>~</mo></mover><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            Since the Fourier transform is a unitary transformation (it is like multiplying by an orthonormal matrix),
+            the noise variance in the frequency domain is the same as it was in the space domain. But the signal variance
+            is now different for each frequency as it follows the 1/f<sup>2</sup> power law:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="1 over f squared power law">
+              <math display="block" aria-label="sigma^2(f) equals k |f|^{-2}">
+                <mrow>
+                  <msup><mi>&#x03C3;</mi><mn>2</mn></msup><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo><mo>=</mo>
+                  <mi>k</mi><mo>&#x22C5;</mo>
+                  <msup>
+                    <mrow><mo stretchy="false">|</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">|</mo></mrow>
+                    <mrow><mo>&#x2212;</mo><mn>2</mn></mrow>
+                  </msup>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            We just need to set the constant of proportionality
+            <math aria-label="k"><mi>k</mi></math>
+            so that the total signal power in the frequency domain equals the signal power in the space domain, which can
+            be accomplished via
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="k normalization">
+              <math display="block" aria-label="k equals sum_x sigma^2(x) divided by sum_f |f|^{-2}">
+                <mrow>
+                  <mi>k</mi><mo>=</mo>
+                  <mfrac>
+                    <mrow>
+                      <munderover>
+                        <mo>&#x2211;</mo>
+                        <mrow><mover><mi>x</mi><mo>&#x2192;</mo></mover></mrow>
+                        <mrow></mrow>
+                      </munderover>
+                      <msup><mi>&#x03C3;</mi><mn>2</mn></msup><mo stretchy="false">(</mo><mover><mi>x</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                    </mrow>
+                    <mrow>
+                      <munderover>
+                        <mo>&#x2211;</mo>
+                        <mrow><mover><mi>f</mi><mo>&#x2192;</mo></mover></mrow>
+                        <mrow></mrow>
+                      </munderover>
+                      <msup>
+                        <mrow><mo stretchy="false">|</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">|</mo></mrow>
+                        <mrow><mo>&#x2212;</mo><mn>2</mn></mrow>
+                      </msup>
+                    </mrow>
+                  </mfrac>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            We can then denoise the image frequency by frequency as follows:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Frequency-wise attenuation">
+              <math display="block" aria-label="I-tilde-hat equals a(f) I-tilde">
+                <mrow>
+                  <mover><mover><mi>I</mi><mo>~</mo></mover><mo>^</mo></mover><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo><mo>=</mo>
+                  <mi>a</mi><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                  <mover><mi>I</mi><mo>~</mo></mover><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            where
+            <math aria-label="a(f-vector)"><mi>a</mi><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo></math>
+            is the attenuation factor computed from the signal and noise variance for each frequency. In this case, then
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="a(f) formula">
+              <math display="block" aria-label="a(f) equals sigma^2(f)/(sigma^2(f)+sigma_n^2)">
+                <mrow>
+                  <mi>a</mi><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo><mo>=</mo>
+                  <mfrac>
+                    <mrow>
+                      <msup><mi>&#x03C3;</mi><mn>2</mn></msup><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                    </mrow>
+                    <mrow>
+                      <msup><mi>&#x03C3;</mi><mn>2</mn></msup><mo stretchy="false">(</mo><mover><mi>f</mi><mo>&#x2192;</mo></mover><mo stretchy="false">)</mo>
+                      <mo>+</mo>
+                      <msubsup><mi>&#x03C3;</mi><mi>n</mi><mn>2</mn></msubsup>
+                    </mrow>
+                  </mfrac>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            Examine the code below which implements the above equations and be sure you understand it. Try running it for
+            different amounts of noise to see how far you can go before the image is unrecoverable.
+          </p>
+          </article>
+
+          <aside class="toc toc-mid" aria-label="Table of contents">
+            <h2>Contents</h2>
+            <ol class="toc-main">
+              <li><a href="#introduction">Introduction</a></li>
+              <li><a href="#natural-image-statistics">Natural image statistics (1/f<sup>2</sup>)</a></li>
+              <li><a href="#bayesian-denoising">Bayesian denoising</a></li>
+              <li><a href="#wavelet-coring">Wavelet coring</a></li>
+              <li><a href="#langevin-sampling">Langevin sampling</a></li>
+              <li><a href="#inpainting">Inpainting</a></li>
+              <li><a href="#comparison">Comparison</a></li>
+              <li><a href="#discussion">Discussion</a></li>
+            </ol>
+            <div class="divider"></div>
+            <ol class="toc-secondary">
+              <li><a href="#acknowledgments">Acknowledgments</a></li>
+              <li><a href="#citation-information">Citation Information</a></li>
+              <li><a href="#references">References</a></li>
+            </ol>
+          </aside>
+        </div>
+
+        <!-- Full-width Figure 3 (spans across the article + TOC columns). -->
+        <figure class="figure-fullbleed figure-3">
+          <div class="demo-embed">
+            <iframe
+              src="code/web/denoise_wiener_demo/?embed=1"
+              title="Wiener denoising demo"
+              loading="lazy"
+              referrerpolicy="no-referrer"
+            ></iframe>
+          </div>
+          <figcaption>
+            <strong>Figure 3.</strong> Wiener denoising in the frequency domain using a 1/f<sup>2</sup> natural-image prior.
+          </figcaption>
+        </figure>
+
+        <!-- Section 2c: rest of the post + TOC (TOC reappears after Figure 3). -->
+        <div class="grid-section">
+          <article class="prose">
+
+          <h2 id="wavelet-coring">Wavelet Coring</h2>
+          <p>
+            In the previous section we used the Wiener filter to attenuate each frequency. In this section, instead of 
+            modifying frequency content, we will take wavelet decomposition of the image and modify the wavelet coefficients. 
+            This is a method developed by Simoncelli and Adelson in 1996 
+            <a class="cite" href="#ref-simoncelli1996" data-ref="ref-simoncelli1996">[4]</a>. 
+            It relies on steerable pyramids 
+            <a class="cite" href="#ref-simoncelli1995" data-ref="ref-simoncelli1995">[5]</a>, 
+            which is a method for decomposing an image. If you want a great explanation of steerable pyramids check out the 
+            actively maintained pyrtools documentation page about steerable pyramids 
+            <a class="cite" href="#ref-pyrtools" data-ref="ref-pyrtools">[6]</a>. 
+            Below is an example of the steerable pyramid decomposition. The left figure shows the filters and the right figure 
+            shows the activations on the Einstein image for each of the filters.
+          </p>
+
+          <figure class="figure-wavelet-coring">
+            <div class="figure-side-by-side">
+              <div class="figure-side">
+                <img
+                  src="images/steerable_pyr_filters.png"
+                  alt="Steerable pyramid filters showing the frequency decomposition filters"
+                  loading="lazy"
+                />
+              </div>
+              <div class="figure-side">
+                <img
+                  src="images/einstein_steer_pyr_activations.png"
+                  alt="Steerable pyramid activations on the Einstein image showing the response of each filter"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <strong>Figure 4.</strong> Steerable pyramid decomposition. 
+              <strong>Left:</strong> The steerable pyramid filters used for decomposition. 
+              <strong>Right:</strong> The activations (filter responses) on the Einstein image for each of the filters.
+            </figcaption>
+          </figure>
+
+          <p>
+            You can see from the figure above that there are different levels. The top level (first row of the left figure) responds to high frequency information. The second row responds to medium frequency information while the bottom row responds to low frequency information.
+          </p>
+
+          <p>
+            I am going to follow the implementation details of this method based on Professor Rob Fergus' class assignment
+            <a class="cite" href="#ref-fergus" data-ref="ref-fergus">[7]</a>.
+            Now lets only focus on the first orientation (first column, all three rows). This first orientation will detect vertical edges. In the figure below we see three columns. The first column shows the filter again for reference. The second column shows the filters' outputs for the original uncorrupted image. The third column shows the filters' outputs for the image corrupted with gaussian noise of
+            <math aria-label="sigma equals 0.075"><mi>&#x03C3;</mi><mo>=</mo><mn>0.075</mn></math>.
+            The important thing to notice is that most of the noise shows up in the high frequency filtered output. In the two bottom rows for the original and noisy version, the filtered outputs look roughly the same. However, for the top row– the high frequency filtered output– the noisy version clearly looks a lot more corrupted than the original version.
+          </p>
+
+          <figure class="figure-5">
+            <img
+              src="images/noise_vs_nonoise.png"
+              alt="Comparison of filter outputs for original and noisy images showing noise primarily affects high frequency components"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Figure 5.</strong> Filter outputs comparison. 
+              <strong>Left:</strong> Filter reference. 
+              <strong>Middle:</strong> Filter outputs for original uncorrupted image. 
+              <strong>Right:</strong> Filter outputs for image corrupted with gaussian noise.
+            </figcaption>
+          </figure>
+
+          <p>
+            Now let's focus only on the highest frequency filter, the first row from the above figure. We can plot out the distribution of the filtered outputs for both the original and noisy version of the image as you can see in the figure below. The top row is the same as the top row from figure 5. The bottom row shows the distributions as histograms. Notably the original filtered output's histogram has a far more sharply peaked distribution at the center than the noisy filtered output's histogram. The main intuition for this method of denoising is to try to transform the noisy filtered output's histogram to match the original filtered output's histogram.
+          </p>
+
+          <figure class="figure-6">
+            <img
+              src="images/noise_vs_nonoise_hist.jpg"
+              alt="Histogram comparison of filter outputs showing original has sharper peak than noisy version"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Figure 6.</strong> Distribution comparison of highest frequency filter outputs. 
+              <strong>Top row:</strong> Filter outputs (same as top row from Figure 5). 
+              <strong>Bottom row:</strong> Histogram distributions showing the original has a more sharply peaked distribution at the center compared to the noisy version.
+            </figcaption>
+          </figure>
+
+          <h2 id="langevin-sampling">Gradient descent + Langevin sampling</h2>
+          <p class="muted">
+            Coming next: interpreting denoising as sampling from the posterior with injected noise.
+          </p>
+
+          <figure class="figure-fullbleed figure-7">
+            <div class="demo-embed">
+              <iframe
+                src="code/web/denoise_demo/?embed=1"
+                title="Gradient descent + Langevin denoising demo"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              ></iframe>
+            </div>
+            <figcaption>
+              <strong>Figure 7.</strong> Gradient descent + Langevin sampling demo with a 1/f<sup>2</sup> prior.
+            </figcaption>
+          </figure>
+
+          <h2 id="inpainting">Filling in images with missing pixels</h2>
+          <p class="muted">
+            Coming next: the same Bayesian framework for inpainting when many pixels are missing.
+          </p>
+
+          <figure class="figure-fullbleed figure-8">
+            <div class="demo-embed">
+              <iframe
+                src="code/web/fillin_demo/?embed=1"
+                title="Inpainting demo"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              ></iframe>
+            </div>
+            <figcaption>
+              <strong>Figure 8.</strong> Inpainting by sampling missing pixels under a 1/f<sup>2</sup> prior.
+            </figcaption>
+          </figure>
+
+          <h2 id="comparison">Comparison to modern deep learning approaches</h2>
+          <p class="muted">
+            Coming next: qualitative + quantitative comparison against standard deep denoisers and
+            inpainters.
+          </p>
+
+          <h2 id="discussion">Discussion</h2>
+          <p>
+            Takeaways, limitations, and next steps.
+          </p>
+
+          <section class="endmatter" aria-label="End matter">
+            <div class="endmatter-row" id="acknowledgments">
+              <div class="endmatter-title">
+                <h2>Acknowledgments</h2>
+              </div>
+              <div class="endmatter-body">
+                <p>
+                  I recently served as the GSI for UC Berkeley's NEU 172L: Cognitive and Computational Lab. This is a brand new course, 
+                  taught for the first time in Fall 2025. The goal of the course is to introduce students to the experimental and 
+                  analytical techniques used by cognitive and computational neuroscientists. It was taught by 
+                  <a href="https://theunissen.berkeley.edu/">Frederic E Theunissen</a>, 
+                  <a href="https://argentum.ucbso.berkeley.edu/">Michael Silver</a>, and 
+                  <a href="https://redwood.berkeley.edu/people/bruno-olshausen/">Bruno Olshausen</a>. 
+                  I had the pleasure of helping to develop some of the labs that were taught during the course. Part of Bruno's labs 
+                  were built to teach students about the Fourier transform and Bayesian inference. The content and code in this write-up 
+                  were initially developed for the course's labs. I had an incredible time building these labs and teaching them to the 
+                  students, which is what motivated me to make this write-up. I also had the privilege of learning a lot of this content 
+                  one-on-one from Bruno and I would like to sincerely thank him for his time and patience to teach me everything.
+                </p>
+                <p>
+                  I would also like to thank my Co-GSI <a href="https://www.linkedin.com/in/carolyn-irving-b62299161">Carolyn Irving</a> for being an amazing teammate and also helping develop the labs 
+                  that eventually became a part of this write up. Finally, I would like to thank the Berkeley Neuroscience Department 
+                  for giving me the opportunity to GSI NEU 172L and funding me for Fall 2025.
+                </p>
+                <p>
+                  This webpage is inspired by the aesthetic of
+                  <a href="https://transformer-circuits.pub/2025/attribution-graphs/biology.html">Transformer Circuits</a>.
+                </p>
+              </div>
+            </div>
+
+            <div class="endmatter-row" id="citation-information">
+              <div class="endmatter-title">
+                <h2>Citation Information</h2>
+              </div>
+              <div class="endmatter-body">
+                <p>
+                  For attribution in academic contexts, please cite this work as
+                </p>
+                <div class="citation-text-box">
+                  Kothapalli, T., &amp; Olshausen, B., "Denoising Images with Natural Scene Statistics", 2026.
+                </div>
+                <p>
+                  <strong>BibTeX citation</strong>
+                </p>
+                <pre><code>@article{kothapalli2026denoising,
+  author={Kothapalli, Tejasvi and Olshausen, Bruno},
+  title={Denoising Images with Natural Scene Statistics},
+  year={2026},
+  url={https://tejasvikothapalli.github.io/blogs/denoising/}
+}</code></pre>
+              </div>
+            </div>
+
+            <div class="endmatter-row" id="references">
+              <div class="endmatter-title">
+                <h2>References</h2>
+              </div>
+              <div class="endmatter-body">
+                <ol class="refs">
+                  <li id="ref-field1987">
+                    Field, D. J. (1987). Relations between the statistics of natural images and the
+                    response properties of cortical cells. <em>Journal of the Optical Society of America A</em>,
+                    4(12), 2379–2394.
+                    <a class="ref-url" href="https://doi.org/10.1364/JOSAA.4.002379" target="_blank" rel="noopener noreferrer">[link]</a>
+                  </li>
+                  <li id="ref-voss1978">
+                    Voss, R. F., &amp; Clarke, J. (1978). “1/f noise” in music: Music from 1/f noise.
+                    <em>The Journal of the Acoustical Society of America</em>, 63(1), 258–263.
+                    <a class="ref-url" href="https://doi.org/10.1121/1.381721" target="_blank" rel="noopener noreferrer">[link]</a>
+              </li>
+                  <li id="ref-olshausen2004">
+                    Olshausen, B. A. (2004). Bayesian probability theory. The Redwood Center for Theoretical Neuroscience,
+                    Helen Wills Neuroscience Institute at the University of California at Berkeley, Berkeley, CA.
+                    <a class="ref-url" href="https://redwood.berkeley.edu/wp-content/uploads/2018/08/Bayes-prob-generative.pdf" target="_blank" rel="noopener noreferrer">[link]</a>
+                  </li>
+                  <li id="ref-simoncelli1996">
+                    Simoncelli, E. P., &amp; Adelson, E. H. (1996, September). Noise removal via Bayesian wavelet coring. 
+                    In <em>Proceedings of 3rd IEEE International Conference on Image Processing</em> (Vol. 1, pp. 379–382). IEEE.
+                    <a class="ref-url" href="https://doi.org/10.1109/ICIP.1996.559512" target="_blank" rel="noopener noreferrer">[link]</a>
+                  </li>
+                  <li id="ref-simoncelli1995">
+                    Simoncelli, E. P., &amp; Freeman, W. T. (1995, October). The steerable pyramid: A flexible architecture for multi-scale derivative computation. 
+                    In <em>Proceedings, International Conference on Image Processing</em> (Vol. 3, pp. 444–447). IEEE.
+                    <a class="ref-url" href="https://doi.org/10.1109/ICIP.1995.537667" target="_blank" rel="noopener noreferrer">[link]</a>
+                  </li>
+                  <li id="ref-pyrtools">
+                    Simoncelli, E., Young, R., Broderick, W., Fiquet, P. É., Wang, Z., Kadkhodaie, Z., ... &amp; Ward, B. (2024, July). 
+                    Pyrtools: tools for multi-scale image processing. 
+                    <a class="ref-url" href="https://pyrtools.readthedocs.io/en/latest/tutorials/03_steerable_pyramids.html" target="_blank" rel="noopener noreferrer">[link]</a>
+                  </li>
+                  <li id="ref-fergus">
+                    Fergus, R. Computational Photography. New York University, Department of Computer Science.
+                    <a class="ref-url" href="https://cs.nyu.edu/~fergus/teaching/comp_photo" target="_blank" rel="noopener noreferrer">[link]</a>
+                  </li>
+            </ol>
+              </div>
+            </div>
+          </section>
+        </article>
+
+          <aside class="toc toc-bottom" aria-label="Table of contents">
+          <h2>Contents</h2>
+          <ol class="toc-main">
+            <li><a href="#introduction">Introduction</a></li>
+            <li><a href="#natural-image-statistics">Natural image statistics (1/f<sup>2</sup>)</a></li>
+            <li><a href="#bayesian-denoising">Bayesian denoising</a></li>
+            <li><a href="#wavelet-coring">Wavelet coring</a></li>
+            <li><a href="#langevin-sampling">Langevin sampling</a></li>
+            <li><a href="#inpainting">Inpainting</a></li>
+            <li><a href="#comparison">Comparison</a></li>
+            <li><a href="#discussion">Discussion</a></li>
+          </ol>
+          <div class="divider"></div>
+          <ol class="toc-secondary">
+            <li><a href="#acknowledgments">Acknowledgments</a></li>
+            <li><a href="#citation-information">Citation Information</a></li>
+            <li><a href="#references">References</a></li>
+          </ol>
+        </aside>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // Ensure only ONE TOC is visible at a time (prevents both showing when zoomed out).
+      // Rule: show the next TOC only after the corresponding full-width figure has been scrolled past.
+      (() => {
+        const fig1 = document.querySelector(".figure-fullbleed.figure-1");
+        const fig3 = document.querySelector(".figure-fullbleed.figure-3");
+        const tocTop = document.querySelector(".toc.toc-top");
+        const tocMid = document.querySelector(".toc.toc-mid");
+        const tocBottom = document.querySelector(".toc.toc-bottom");
+        if (!fig1 || !fig3 || !tocTop || !tocMid || !tocBottom) return;
+
+        const mobileMQ = window.matchMedia("(max-width: 980px)");
+
+        // Auto-size demo iframes to their content height (same-origin), so there's no blank space.
+        const iframes = Array.from(document.querySelectorAll(".demo-embed iframe"));
+        const resizeOne = (iframe) => {
+          if (!iframe) return;
+          try {
+            // Break the "can't shrink" feedback loop by shrinking before measuring.
+            // Otherwise scrollHeight can be pinned to the iframe's current viewport height.
+            iframe.style.height = "1px";
+            const doc = iframe.contentDocument;
+            if (!doc) return;
+            const h = Math.max(
+              doc.documentElement?.scrollHeight || 0,
+              doc.body?.scrollHeight || 0,
+              doc.documentElement?.offsetHeight || 0,
+              doc.body?.offsetHeight || 0
+            );
+            if (h > 0) iframe.style.height = `${h}px`;
+          } catch {
+            // If the iframe ever becomes cross-origin, we can't measure it; keep CSS fallback height.
+          }
+        };
+        const resizeAllIframes = () => iframes.forEach(resizeOne);
+        iframes.forEach((iframe) => {
+          iframe.addEventListener("load", () => {
+            resizeOne(iframe);
+            // Re-measure a couple times in case layout/fonts settle after load.
+            setTimeout(() => resizeOne(iframe), 50);
+            setTimeout(() => resizeOne(iframe), 250);
+          });
+        });
+        window.addEventListener("resize", resizeAllIframes);
+
+        const setVisible = (el, visible) => {
+          if (!el) return;
+          // Use an explicit inline display override because CSS hides .toc-bottom by default.
+          el.style.display = visible ? "block" : "none";
+          el.setAttribute("aria-hidden", visible ? "false" : "true");
+        };
+
+        const update = () => {
+          const r1 = fig1.getBoundingClientRect();
+          const r3 = fig3.getBoundingClientRect();
+          // Show the bottom TOC as soon as the demo's bottom edge is visible in the viewport.
+          // This avoids a "no TOC" gap right after the figures, and matches "reappear at the bottom
+          // of the figure when the bottom becomes visible".
+          // On mobile, we don't use the sticky/swap behavior; we hide the sidebar TOC and show
+          // the bottom TOC only in its natural position (after footnotes).
+          if (mobileMQ.matches) {
+            setVisible(tocTop, false);
+            setVisible(tocMid, false);
+            setVisible(tocBottom, true);
+            return;
+          }
+
+          const fig1BottomVisible = r1.bottom <= window.innerHeight;
+          const fig3BottomVisible = r3.bottom <= window.innerHeight;
+
+          setVisible(tocTop, !fig1BottomVisible);
+          setVisible(tocMid, fig1BottomVisible && !fig3BottomVisible);
+          setVisible(tocBottom, fig3BottomVisible);
+        };
+
+        window.addEventListener("scroll", update, { passive: true });
+        window.addEventListener("resize", update);
+        mobileMQ.addEventListener?.("change", update);
+        update();
+        resizeAllIframes();
+      })();
+
+      // Close any <details class="fold"> via a bottom "hide" button.
+      (() => {
+        document.addEventListener("click", (e) => {
+          const btn = e.target?.closest?.(".fold-hide");
+          if (!btn) return;
+          const details = btn.closest("details.fold");
+          if (!details) return;
+          details.open = false;
+          // Keep the UI anchored near the summary after closing.
+          details.querySelector("summary")?.scrollIntoView({ block: "nearest" });
+        });
+      })();
+
+      // Citation hover previews (Transformer-Circuits-ish).
+      (() => {
+        const tooltip = document.createElement("div");
+        tooltip.className = "cite-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+
+        let hideTimer = null;
+        let isOverTooltip = false;
+
+        const hide = () => {
+          tooltip.style.display = "none";
+          tooltip.innerHTML = "";
+          tooltip.removeAttribute("data-showing");
+        };
+
+        const scheduleHide = () => {
+          if (hideTimer) window.clearTimeout(hideTimer);
+          hideTimer = window.setTimeout(() => {
+            if (!isOverTooltip) hide();
+          }, 180);
+        };
+
+        const cancelHide = () => {
+          if (hideTimer) window.clearTimeout(hideTimer);
+          hideTimer = null;
+        };
+
+        const showFor = (a) => {
+          const refId = a.getAttribute("data-ref");
+          if (!refId) return;
+          const ref = document.getElementById(refId);
+          if (!ref) return;
+
+          cancelHide();
+
+          const refHtml = ref.innerHTML.trim();
+          const refAnchorHref = a.getAttribute("href") || "#";
+          const paperUrl = ref.querySelector("a.ref-url")?.getAttribute("href");
+
+          const html = `
+            <div class="cite-tooltip-inner">
+              <div class="cite-tooltip-main">${refHtml}</div>
+              <div class="cite-tooltip-actions">
+                <a class="cite-link" href="${refAnchorHref}">[ref]</a>
+                ${paperUrl ? `<a class="cite-link" href="${paperUrl}" target="_blank" rel="noopener noreferrer">[link]</a>` : ""}
+              </div>
+            </div>
+          `;
+          tooltip.innerHTML = html;
+          tooltip.style.display = "block";
+          tooltip.setAttribute("data-showing", "1");
+
+          // Position: under the citation, clamped to viewport.
+          const r = a.getBoundingClientRect();
+          const pad = 12;
+          const top = Math.min(window.innerHeight - pad, r.bottom + 10);
+          tooltip.style.top = `${top}px`;
+          tooltip.style.left = `${Math.min(window.innerWidth - pad, Math.max(pad, r.left))}px`;
+
+          // Clamp if it overflows right edge after layout.
+          requestAnimationFrame(() => {
+            const tr = tooltip.getBoundingClientRect();
+            let left = tr.left;
+            if (tr.right > window.innerWidth - pad) left -= tr.right - (window.innerWidth - pad);
+            if (left < pad) left = pad;
+            tooltip.style.left = `${left}px`;
+            // If bottom overflows, flip above.
+            const tr2 = tooltip.getBoundingClientRect();
+            if (tr2.bottom > window.innerHeight - pad) {
+              const aboveTop = Math.max(pad, r.top - tr2.height - 10);
+              tooltip.style.top = `${aboveTop}px`;
+            }
+          });
+        };
+
+        const onEnter = (e) => {
+          const a = e.target?.closest?.("a.cite");
+          if (!a) return;
+          showFor(a);
+        };
+        const onLeave = (e) => {
+          const a = e.target?.closest?.("a.cite");
+          if (!a) return;
+          scheduleHide();
+        };
+
+        document.addEventListener("mouseenter", onEnter, true);
+        document.addEventListener("mouseleave", onLeave, true);
+        document.addEventListener("focusin", (e) => {
+          const a = e.target?.closest?.("a.cite");
+          if (a) showFor(a);
+        });
+        document.addEventListener("focusout", (e) => {
+          const a = e.target?.closest?.("a.cite");
+          if (a) scheduleHide();
+        });
+
+        tooltip.addEventListener("mouseenter", () => {
+          isOverTooltip = true;
+          cancelHide();
+        });
+        tooltip.addEventListener("mouseleave", () => {
+          isOverTooltip = false;
+          scheduleHide();
+        });
+
+        window.addEventListener("scroll", () => {
+          if (tooltip.getAttribute("data-showing")) hide();
+        }, { passive: true });
+        window.addEventListener("resize", hide);
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Blogs</title>
+    <meta name="author" content="Tejasvi Kothapalli">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        color-scheme: light dark;
+        --page-max: 980px;
+        --gutter: 24px;
+        --bg: #ffffff;
+        --panel: #f7f7f8;
+        --text: #0f172a;
+        --muted: #5b6476;
+        --faint: #8a94a7;
+        --border: rgba(15, 23, 42, 0.12);
+        --link: #1a56db;
+        --link-hover: #f08a24;
+        --accent: #111827;
+        --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        --s1: 14px;
+        --s2: 18px;
+        --s3: 24px;
+        --s4: 32px;
+        --s5: 44px;
+        --r: 12px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0d12;
+          --panel: rgba(255, 255, 255, 0.06);
+          --text: rgba(255, 255, 255, 0.92);
+          --muted: rgba(255, 255, 255, 0.72);
+          --faint: rgba(255, 255, 255, 0.56);
+          --border: rgba(255, 255, 255, 0.14);
+          --link: #7aa2ff;
+          --link-hover: #f3a14b;
+          --accent: rgba(255, 255, 255, 0.92);
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      a { color: var(--link); text-decoration: none; }
+      a:hover { color: var(--link-hover); }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        backdrop-filter: saturate(140%) blur(10px);
+        -webkit-backdrop-filter: saturate(140%) blur(10px);
+        background: color-mix(in srgb, var(--bg) 86%, transparent);
+        border-bottom: 1px solid var(--border);
+      }
+      .topbar-inner {
+        max-width: var(--page-max);
+        margin: 0 auto;
+        padding: 10px var(--gutter);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+      .brand .site { font-weight: 650; letter-spacing: 0.2px; color: var(--accent); }
+      .brand .pipe { color: var(--faint); }
+      .brand .section { color: var(--muted); font-size: 13px; }
+      .topnav { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+      .topnav a { color: var(--muted); }
+      .topnav a:hover { color: var(--accent); }
+      .wrap { max-width: var(--page-max); margin: 0 auto; padding: var(--s5) var(--gutter); }
+      h1 {
+        margin: 0 0 var(--s2);
+        font-size: clamp(32px, 3vw, 44px);
+        letter-spacing: -0.02em;
+        line-height: 1.08;
+      }
+      .sub { margin: 0 0 var(--s4); color: var(--muted); max-width: 70ch; line-height: 1.6; }
+      .grid { display: grid; gap: 14px; }
+      .card {
+        padding: 16px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--r);
+        background: var(--panel);
+      }
+      .title { font-weight: 650; color: var(--accent); margin-bottom: 4px; }
+      .desc { color: var(--muted); line-height: 1.6; }
+      .meta { margin-top: 10px; font-size: 12px; color: var(--faint); }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="site">Your Site</div>
+          <div class="pipe">/</div>
+          <div class="section">Blogs</div>
+        </div>
+        <nav class="topnav" aria-label="Site navigation">
+          <a href="../index.html">Home</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <h1>Blogs</h1>
+      <p class="sub">
+        A lightweight, readable blog format. Each post is a single self-contained HTML file with a
+        consistent typography + spacing system.
+      </p>
+
+      <section class="grid" aria-label="Posts">
+        <a class="card" href="./denoising/">
+          <div class="title">Denoising</div>
+          <div class="desc">
+            A clean template inspired by the Transformer Circuits aesthetic (TOC, callouts, figures,
+            code styling). Replace the placeholders with your content.
+          </div>
+          <div class="meta">
+            Inspired by:
+            https://transformer-circuits.pub/2025/attribution-graphs/biology.html
+          </div>
+        </a>
+      </section>
+    </main>
+  </body>
+</html>
+
+
