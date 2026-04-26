@@ -22,9 +22,9 @@
     <header class="topbar">
       <div class="topbar-inner">
         <div class="brand">
-          <div class="site">Your Site</div>
+          <div class="site">Tejasvi Kothapalli</div>
           <div class="pipe">/</div>
-          <div class="section">Blog</div>
+          <div class="section">Blogs</div>
         </div>
         <nav class="topnav" aria-label="Site navigation">
           <a href="../../index.html">Home</a>
@@ -52,7 +52,7 @@
         </div>
         <div class="meta-row">
           <span class="k">Published</span>
-          <span class="v">Jan 1, 2026</span>
+          <span class="v">April 25, 2026</span>
         </div>
         <div class="meta-row">
           <span class="k">Tags</span>
@@ -74,8 +74,7 @@
               Namely, natural images have a 1/f<sup>2</sup> power spectrum. Using this information as
               our prior, we can use bayesian inference in order to denoise an image which has been
               corrupted by gaussian noise. Using the same framework, we can also fill in an image
-              where 99% of the true pixel values are missing. Finally, we compare this simple
-              bayesian inference approach to modern AI methods for denoising and filling in.
+              where 99% of the true pixel values are missing.
             </p>
           </div>
 
@@ -89,7 +88,6 @@
               <li><a href="#wavelet-coring">Wavelet coring</a></li>
               <li><a href="#langevin-sampling">Langevin sampling</a></li>
               <li><a href="#inpainting">Inpainting</a></li>
-              <li><a href="#comparison">Comparison</a></li>
               <li><a href="#discussion">Discussion</a></li>
             </ol>
             <div class="divider"></div>
@@ -108,9 +106,7 @@
             an image. The third part will implement Simoncelli et al.’s “NOISE REMOVAL VIA BAYESIAN
             WAVELET CORING” in order to do denoising. The fourth part will discuss using gradient
             descent with langevin sampling in order to denoise an image. The fifth part will
-            demonstrate filling in an image where a large percentage of pixels are missing. The
-            sixth and final part will compare these methods to standard deep learning techniques for
-            denoising and filling in.
+            demonstrate filling in an image where a large percentage of pixels are missing.
           </p>
 
           <h2 id="natural-image-statistics">What do we know about natural images? (1/f<sup>2</sup> power spectrum)</h2>
@@ -503,7 +499,6 @@
               <li><a href="#wavelet-coring">Wavelet coring</a></li>
               <li><a href="#langevin-sampling">Langevin sampling</a></li>
               <li><a href="#inpainting">Inpainting</a></li>
-              <li><a href="#comparison">Comparison</a></li>
               <li><a href="#discussion">Discussion</a></li>
             </ol>
             <div class="divider"></div>
@@ -849,7 +844,6 @@
               <li><a href="#wavelet-coring">Wavelet coring</a></li>
               <li><a href="#langevin-sampling">Langevin sampling</a></li>
               <li><a href="#inpainting">Inpainting</a></li>
-              <li><a href="#comparison">Comparison</a></li>
               <li><a href="#discussion">Discussion</a></li>
             </ol>
             <div class="divider"></div>
@@ -920,15 +914,22 @@
           </figure>
 
           <p>
-            You can see from the figure above that there are different levels. The top level (first row of the left figure) responds to high frequency information. The second row responds to medium frequency information while the bottom row responds to low frequency information.
+            You can see from the figure above that the decomposition separates the image by both
+            scale and orientation. The top row responds to the highest frequencies, the middle row
+            responds to medium frequencies, and the bottom row responds to lower frequencies.
           </p>
 
           <p>
-            I am going to follow the implementation details of this method based on Professor Rob Fergus' class assignment
+            I am going to follow the implementation style from Professor Rob Fergus' computational
+            photography assignment
             <a class="cite" href="#ref-fergus" data-ref="ref-fergus">[7]</a>.
-            Now lets only focus on the first orientation (first column, all three rows). This first orientation will detect vertical edges. In the figure below we see three columns. The first column shows the filter again for reference. The second column shows the filters' outputs for the original uncorrupted image. The third column shows the filters' outputs for the image corrupted with gaussian noise of
+            To keep the picture simple, focus on one orientation band: the first column below, which
+            is most sensitive to vertical edges. The first column shows the filter, the second column
+            shows the filter output for the clean Einstein image, and the third column shows the same
+            output after adding Gaussian noise with
             <math aria-label="sigma equals 0.075"><mi>&#x03C3;</mi><mo>=</mo><mn>0.075</mn></math>.
-            The important thing to notice is that most of the noise shows up in the high frequency filtered output. In the two bottom rows for the original and noisy version, the filtered outputs look roughly the same. However, for the top row– the high frequency filtered output– the noisy version clearly looks a lot more corrupted than the original version.
+            Notice that the highest-frequency band is much more corrupted by the noise than the
+            lower-frequency bands.
           </p>
 
           <figure class="figure-5">
@@ -946,7 +947,11 @@
           </figure>
 
           <p>
-            Now let's focus only on the highest frequency filter, the first row from the above figure. We can plot out the distribution of the filtered outputs for both the original and noisy version of the image as you can see in the figure below. The top row is the same as the top row from figure 5. The bottom row shows the distributions as histograms. Notably the original filtered output's histogram has a far more sharply peaked distribution at the center than the noisy filtered output's histogram. The main intuition for this method of denoising is to try to transform the noisy filtered output's histogram to match the original filtered output's histogram.
+            Now focus only on the highest-frequency band. The clean image has a sharply peaked
+            coefficient distribution: most coefficients are close to zero, but a few large coefficients
+            correspond to real edges. Adding Gaussian noise spreads this distribution out. Wavelet
+            coring uses this difference in distributions to decide which noisy coefficients should be
+            suppressed and which should be kept.
           </p>
 
           <figure class="figure-6">
@@ -962,12 +967,165 @@
             </figcaption>
           </figure>
 
-          <h2 id="langevin-sampling">Gradient descent + Langevin sampling</h2>
-          <p class="muted">
-            Coming next: interpreting denoising as sampling from the posterior with injected noise.
+          <p>
+            The Bayesian version of coring starts with the same scalar observation model we used
+            before, but now
+            <math aria-label="x"><mi>x</mi></math>
+            is a clean wavelet coefficient and
+            <math aria-label="y"><mi>y</mi></math>
+            is the noisy coefficient:
           </p>
 
-          <figure class="figure-fullbleed figure-7">
+          <figure class="equation-block">
+            <div class="equations" aria-label="Wavelet coefficient observation model">
+              <math display="block" aria-label="y equals x plus n">
+                <mrow>
+                  <mi>y</mi><mo>=</mo><mi>x</mi><mo>+</mo><mi>n</mi>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            The least-squares optimal estimate is the posterior mean,
+            <math aria-label="x hat of y"><mover><mi>x</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mi>y</mi><mo stretchy="false">)</mo></math>.
+            By Bayes' rule this can be written as
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Posterior mean coring estimator">
+              <math display="block" aria-label="x hat of y equals integral x Pn(y minus x) Px(x) dx over integral Pn(y minus x) Px(x) dx">
+                <mrow>
+                  <mover><mi>x</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mi>y</mi><mo stretchy="false">)</mo><mo>=</mo>
+                  <mfrac>
+                    <mrow>
+                      <mo>&#x222B;</mo>
+                      <mi>x</mi>
+                      <msub><mi>P</mi><mi>n</mi></msub><mo stretchy="false">(</mo><mi>y</mi><mo>&#x2212;</mo><mi>x</mi><mo stretchy="false">)</mo>
+                      <msub><mi>P</mi><mi>x</mi></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo>
+                      <mi>d</mi><mi>x</mi>
+                    </mrow>
+                    <mrow>
+                      <mo>&#x222B;</mo>
+                      <msub><mi>P</mi><mi>n</mi></msub><mo stretchy="false">(</mo><mi>y</mi><mo>&#x2212;</mo><mi>x</mi><mo stretchy="false">)</mo>
+                      <msub><mi>P</mi><mi>x</mi></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo>
+                      <mi>d</mi><mi>x</mi>
+                    </mrow>
+                  </mfrac>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            Here
+            <math aria-label="P n"><msub><mi>P</mi><mi>n</mi></msub></math>
+            is the noise distribution and
+            <math aria-label="P x"><msub><mi>P</mi><mi>x</mi></msub></math>
+            is the prior distribution of clean coefficients. If both are Gaussian, this reduces to a
+            linear Wiener-style shrinkage. But natural-image wavelet coefficients are not Gaussian:
+            they are sharply peaked at zero with heavy tails. That changes the posterior mean into a
+            nonlinear coring curve. Small observed coefficients are pulled toward zero because they
+            are likely to be noise, while large coefficients are mostly preserved because they are more
+            likely to be real image structure.
+          </p>
+
+          <figure class="figure-7">
+            <img
+              src="images/wavelet_coring_function.png"
+              alt="Histograms of natural image and noise wavelet coefficients plus the learned coring function"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Figure 7.</strong> The coring function used in the implementation.
+              <strong>Left:</strong> An empirical prior from clean natural-image wavelet coefficients.
+              <strong>Middle:</strong> The corresponding noise coefficient distribution.
+              <strong>Right:</strong> The posterior-mean estimator for a representative finest-scale
+              oriented band. Compared to the identity line, it suppresses small coefficients and
+              preserves larger coefficients.
+            </figcaption>
+          </figure>
+
+          <p>
+            In <a href="code/coring.py">the code</a>, this posterior mean is estimated directly from
+            histograms. The implementation cores the residual highpass band and the four finest
+            oriented bands. For each band, the denominator is the convolution
+            of the clean-coefficient histogram with the noise histogram, which gives the distribution
+            of noisy observations. The numerator is the same convolution after weighting the clean
+            coefficients by their value. Dividing the two gives a lookup table
+            <math aria-label="x hat of y"><mover><mi>x</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mi>y</mi><mo stretchy="false">)</mo></math>
+            that is applied to every coefficient in that band. After coring the high-frequency bands,
+            the steerable pyramid is reconstructed back into an image.
+          </p>
+
+          <figure class="figure-8">
+            <img
+              src="images/wavelet_coring_results.png"
+              alt="Wavelet coring denoising result compared with the noisy image and Wiener filter"
+              loading="lazy"
+            />
+            <figcaption>
+              <strong>Figure 8.</strong> Wavelet coring denoising result generated from the same
+              computation as <a href="code/coring.py">the implementation</a>, with a fixed random
+              seed for reproducibility. For this noise sample, coring improves the noisy image from
+              20.13 dB to 27.45 dB PSNR, slightly above the local Wiener filter baseline.
+            </figcaption>
+          </figure>
+
+          <h2 id="langevin-sampling">Gradient descent + Langevin sampling</h2>
+          <p>
+            The Wiener filter gave us the posterior mean directly. Another way to use the same
+            posterior is to move an image estimate downhill on the negative log posterior. In
+            <a href="code/denoise.py">the implementation</a>, the prior term is still the
+            1/f<sup>2</sup> natural-image prior, so high frequencies are penalized more strongly
+            than low frequencies.
+          </p>
+
+          <p>
+            The update is done in the Fourier domain. Let
+            <math aria-label="I tilde"><mover><mi>I</mi><mo>~</mo></mover></math>
+            be the current estimate and
+            <math aria-label="Y tilde"><mover><mi>Y</mi><mo>~</mo></mover></math>
+            be the noisy observation. The code uses the gradient of the quadratic posterior energy,
+            preconditions each frequency by its curvature, and optionally adds Langevin noise:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Langevin Fourier update">
+              <math display="block" aria-label="H f equals one over sigma n squared plus lambda f">
+                <mrow>
+                  <mi>H</mi><mo stretchy="false">(</mo><mi>f</mi><mo stretchy="false">)</mo><mo>=</mo>
+                  <mfrac><mn>1</mn><msubsup><mi>&#x03C3;</mi><mi>n</mi><mn>2</mn></msubsup></mfrac>
+                  <mo>+</mo>
+                  <mi>&#x03BB;</mi><mo stretchy="false">(</mo><mi>f</mi><mo stretchy="false">)</mo>
+                </mrow>
+              </math>
+              <math display="block" aria-label="I tilde left arrow I tilde minus eta over H gradient plus square root noise">
+                <mrow>
+                  <mover><mi>I</mi><mo>~</mo></mover>
+                  <mo>&#x2190;</mo>
+                  <mover><mi>I</mi><mo>~</mo></mover>
+                  <mo>&#x2212;</mo>
+                  <mfrac><mi>&#x03B7;</mi><mi>H</mi></mfrac>
+                  <mo>&#x2207;</mo><mi>E</mi>
+                  <mo>+</mo>
+                  <msqrt><mfrac><mrow><mn>2</mn><mi>T</mi><mi>&#x03B7;</mi></mrow><mi>H</mi></mfrac></msqrt>
+                  <mi>&#x03BE;</mi>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            When
+            <math aria-label="T equals zero"><mi>T</mi><mo>=</mo><mn>0</mn></math>,
+            this is just gradient descent toward the MAP estimate. When
+            <math aria-label="T greater than zero"><mi>T</mi><mo>&gt;</mo><mn>0</mn></math>,
+            the injected noise turns the procedure into Langevin sampling, so the estimate jitters
+            around plausible images under the posterior instead of collapsing to only one optimum.
+          </p>
+
+          <figure class="figure-fullbleed figure-9">
             <div class="demo-embed">
               <iframe
                 src="code/web/denoise_demo/?embed=1"
@@ -977,16 +1135,48 @@
               ></iframe>
             </div>
             <figcaption>
-              <strong>Figure 7.</strong> Gradient descent + Langevin sampling demo with a 1/f<sup>2</sup> prior.
+              <strong>Figure 9.</strong> Gradient descent + Langevin sampling demo with a 1/f<sup>2</sup> prior.
             </figcaption>
           </figure>
 
           <h2 id="inpainting">Filling in images with missing pixels</h2>
-          <p class="muted">
-            Coming next: the same Bayesian framework for inpainting when many pixels are missing.
+          <p>
+            The inpainting demo uses the same prior, but changes the likelihood. Some pixels are
+            observed and must stay fixed; the rest are unknown. In
+            <a href="code/fillin.py">the implementation</a>, the mask keeps a small fraction of
+            pixels (2% by default in the web demo) and shows the missing pixels in blue.
           </p>
 
-          <figure class="figure-fullbleed figure-8">
+          <p>
+            Since the known pixels are already constrained by the data, the update only changes the
+            missing pixels. At each step, the code computes the gradient of the 1/f<sup>2</sup>
+            prior energy by transforming the current image to the Fourier domain, multiplying by
+            <math aria-label="lambda of f"><mi>&#x03BB;</mi><mo stretchy="false">(</mo><mi>f</mi><mo stretchy="false">)</mo></math>,
+            transforming back, and stepping downhill only where the mask is missing:
+          </p>
+
+          <figure class="equation-block">
+            <div class="equations" aria-label="Inpainting missing-pixel update">
+              <math display="block" aria-label="I missing left arrow I missing minus eta gradient E">
+                <mrow>
+                  <msub><mi>I</mi><mtext>missing</mtext></msub>
+                  <mo>&#x2190;</mo>
+                  <msub><mi>I</mi><mtext>missing</mtext></msub>
+                  <mo>&#x2212;</mo>
+                  <mi>&#x03B7;</mi>
+                  <mo>&#x2207;</mo><mi>E</mi>
+                </mrow>
+              </math>
+            </div>
+          </figure>
+
+          <p>
+            This is why a recognizable image can emerge from very few pixels: the observed pixels
+            anchor the solution, while the 1/f<sup>2</sup> prior fills in the missing values with a
+            power spectrum that looks like a natural image.
+          </p>
+
+          <figure class="figure-fullbleed figure-10">
             <div class="demo-embed">
               <iframe
                 src="code/web/fillin_demo/?embed=1"
@@ -996,19 +1186,31 @@
               ></iframe>
             </div>
             <figcaption>
-              <strong>Figure 8.</strong> Inpainting by sampling missing pixels under a 1/f<sup>2</sup> prior.
+              <strong>Figure 10.</strong> Inpainting by updating missing pixels under a 1/f<sup>2</sup> prior.
             </figcaption>
           </figure>
 
-          <h2 id="comparison">Comparison to modern deep learning approaches</h2>
-          <p class="muted">
-            Coming next: qualitative + quantitative comparison against standard deep denoisers and
-            inpainters.
-          </p>
-
           <h2 id="discussion">Discussion</h2>
           <p>
-            Takeaways, limitations, and next steps.
+            The common thread through all of these examples is that natural images are highly
+            structured. A simple 1/f<sup>2</sup> power-spectrum prior already gives useful denoising
+            and inpainting behavior, and the Bayesian framing tells us exactly how to combine that
+            prior with noisy or incomplete observations.
+          </p>
+
+          <p>
+            The Fourier-domain methods are deliberately simple: they capture the average falloff of
+            power with frequency, but not the localized edge structure of images. Wavelet coring adds
+            one important piece of that structure by using the sparse, heavy-tailed statistics of
+            steerable-pyramid coefficients. This is why it can preserve edges while suppressing
+            small noisy coefficients.
+          </p>
+
+          <p>
+            These methods are not meant to be the final word on image restoration. Their value is
+            that they make the assumptions visible: choose a prior, write down the observation model,
+            and then compute or sample from the posterior. That is the same basic logic behind many
+            more powerful modern methods, even when the prior is learned rather than hand-specified.
           </p>
 
           <section class="endmatter" aria-label="End matter">
@@ -1121,7 +1323,6 @@
             <li><a href="#wavelet-coring">Wavelet coring</a></li>
             <li><a href="#langevin-sampling">Langevin sampling</a></li>
             <li><a href="#inpainting">Inpainting</a></li>
-            <li><a href="#comparison">Comparison</a></li>
             <li><a href="#discussion">Discussion</a></li>
           </ol>
           <div class="divider"></div>

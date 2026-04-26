@@ -93,15 +93,34 @@
         background: var(--panel);
       }
       .title { font-weight: 650; color: var(--accent); margin-bottom: 4px; }
+      .pubdate {
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--faint);
+        letter-spacing: 0.01em;
+      }
       .desc { color: var(--muted); line-height: 1.6; }
-      .meta { margin-top: 10px; font-size: 12px; color: var(--faint); }
+      .meta {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--faint);
+      }
+      .pill {
+        padding: 3px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--panel) 80%, transparent);
+      }
     </style>
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
         <div class="brand">
-          <div class="site">Your Site</div>
+          <div class="site">Tejasvi Kothapalli</div>
           <div class="pipe">/</div>
           <div class="section">Blogs</div>
         </div>
@@ -114,20 +133,55 @@
     <main class="wrap">
       <h1>Blogs</h1>
       <p class="sub">
-        A lightweight, readable blog format. Each post is a single self-contained HTML file with a
-        consistent typography + spacing system.
+        Notes and interactive write-ups on computational neuroscience, image processing, and
+        Bayesian modeling. These posts are meant to be readable explanations paired with runnable
+        code and visual demos.
       </p>
 
       <section class="grid" aria-label="Posts">
         <a class="card" href="./denoising/">
-          <div class="title">Denoising</div>
+          <div class="title">Denoising Images with Natural Scene Statistics</div>
+          <div class="pubdate">Published: April 25, 2026</div>
           <div class="desc">
-            A clean template inspired by the Transformer Circuits aesthetic (TOC, callouts, figures,
-            code styling). Replace the placeholders with your content.
+            A walkthrough of image denoising and inpainting using simple priors over natural images.
+            The post starts with Fourier intuition and the 1/f<sup>2</sup> power spectrum, then uses
+            Bayesian inference, Wiener filtering, wavelet coring with steerable pyramids, Langevin
+            sampling, and missing-pixel reconstruction.
           </div>
           <div class="meta">
-            Inspired by:
-            https://transformer-circuits.pub/2025/attribution-graphs/biology.html
+            <span class="pill">Bayesian inference</span>
+            <span class="pill">Natural image statistics</span>
+            <span class="pill">Steerable pyramids</span>
+            <span class="pill">Interactive demos</span>
+          </div>
+        </a>
+
+        <a class="card" href="./vs265-review/">
+          <div class="title">VS 265 (Neural Computation): Course Review</div>
+          <div class="pubdate">Published: January 1, 2026</div>
+          <div class="desc">
+            A concise review of UC Berkeley's VS 265, covering course structure, lecture themes,
+            assignments, projects, and why it is a strong entry point for students interested in
+            computational neuroscience and NeuroAI.
+          </div>
+          <div class="meta">
+            <span class="pill">Course review</span>
+            <span class="pill">NeuroAI</span>
+            <span class="pill">Computational neuroscience</span>
+          </div>
+        </a>
+
+        <a class="card" href="./berkeley-ml-curriculum-review/">
+          <div class="title">UC Berkeley's Machine Learning Curriculum Review</div>
+          <div class="pubdate">Published: November 20, 2022</div>
+          <div class="desc">
+            A chronological review of Berkeley ML-related coursework with context on course
+            sequencing and reflections on the overall educational experience.
+          </div>
+          <div class="meta">
+            <span class="pill">Course review</span>
+            <span class="pill">Berkeley</span>
+            <span class="pill">Machine learning curriculum</span>
           </div>
         </a>
       </section>
