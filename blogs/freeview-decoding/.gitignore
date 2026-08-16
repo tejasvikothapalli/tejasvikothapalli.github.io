@@ -1,0 +1,2 @@
+# Keep potentially restricted colony imagery available locally but out of the public site.
+data/scenes/colony-*/

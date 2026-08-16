@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Decoding Scenes from V1 During Natural Vision</title>
+    <meta
+      name="description"
+      content="Interactive reconstructions of static natural scenes from free-viewing V1 activity."
+    />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../denoising/style.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="site">Tejasvi Kothapalli</div>
+          <div class="pipe">/</div>
+          <div class="section">Blogs</div>
+        </div>
+        <nav class="topnav" aria-label="Site navigation">
+          <a href="../../index.html">Home</a>
+          <a href="../index.html">Blogs</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap scene-post">
+      <p class="eyebrow">Natural vision</p>
+      <h1>Decoding Scenes from V1 During Natural Vision</h1>
+      <p class="subtitle">
+        Reconstructing static natural scenes from marmoset V1 activity during free viewing.
+      </p>
+
+      <section class="meta" aria-label="Post metadata">
+        <div class="meta-row">
+          <span class="k">Authors</span>
+          <span class="v authors">
+            Tejasvi Kothapalli<sup>1</sup>,
+            <a href="https://jake.vision/">Jacob Yates</a><sup>1</sup>
+          </span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Affiliation</span>
+          <span class="v muted"><sup>1</sup> UC Berkeley Redwood Center for Theoretical Neuroscience</span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Published</span>
+          <span class="v">Aug 15, 2026</span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Tags</span>
+          <span class="v muted">
+            Decoding, Denoising, Natural Scenes, 1/f<sup>2</sup>, Free-viewing, V1, Fovea
+          </span>
+        </div>
+      </section>
+
+      <aside class="method" aria-label="Abstract">
+        <span>Abstract</span>
+        <p>
+          To our knowledge, decoding a full static natural scene from V1 activity during natural
+          vision has never been done. Here, we present an attempt to reconstruct a static scene
+          from V1 activity while a marmoset freely views it. We record neural activity from
+          marmoset foveal V1. Due to retinotopy and the recording location, all recorded cells
+          respond to a ~0.5° × 0.5° region of visual space near the center of gaze. At every
+          fixation, a decoder predicts this gaze-contingent patch from the population’s neural
+          activity. Eye position places each decoded patch in scene coordinates; patches
+          accumulated across fixations and sessions are then combined with a 1/f prior to
+          reconstruct the full scene. The interactive visualization below shows both patch-level
+          decoding fidelity and the resulting full-scene reconstruction. Every reconstruction is
+          fully held out: the decoder was never trained on the scene it reconstructs.
+        </p>
+      </aside>
+
+      <section class="scene-picker" aria-labelledby="scene-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="scene-heading">Scenes</h2>
+            <p>
+              <span id="scene-count">Loading scenes…</span>
+              <span class="scene-instruction">Select a scene, then scroll down to watch its reconstruction unfold.</span>
+            </p>
+          </div>
+        </div>
+        <div id="scene-grid" class="scene-grid" role="listbox" aria-label="Choose a scene"></div>
+      </section>
+
+      <section id="viewer" class="viewer" aria-labelledby="viewer-title" aria-busy="true" tabindex="0">
+        <div class="viewer-heading">
+          <div>
+            <p class="viewer-kicker">Selected scene</p>
+            <h2 id="viewer-title">Loading…</h2>
+          </div>
+          <div class="viewer-actions">
+            <button id="density-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="density-panel">
+              Show fixation density
+            </button>
+            <button id="patch-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="patch-drawer">
+              Show patch decoder
+            </button>
+          </div>
+        </div>
+
+        <div class="viewer-status" aria-live="polite">
+          <div class="status-row">
+            <strong>Total</strong>
+            <span id="scene-data">—</span>
+          </div>
+          <div class="status-row">
+            <strong>Current</strong>
+            <span id="date-label">—</span>
+            <span id="trial-label">Presentation —</span>
+            <span id="session-cells">— cells</span>
+          </div>
+        </div>
+
+        <ol id="keyboard-hint" class="keyboard-hint">
+          <li>Click a point in the original scene to view its patch-decoding fidelity.</li>
+          <li class="keyboard-instruction">
+            <kbd>←</kbd><kbd>→</kbd> step through fixations · hold to accelerate
+          </li>
+        </ol>
+
+        <div class="panel-grid">
+          <figure class="visual-panel">
+            <figcaption>
+              <span>Static natural scene</span>
+              <span class="panel-legend">
+                <span><i class="legend-line legend-hull"></i>Hull</span>
+                <span><i class="legend-square"></i>0.56° Receptive field window</span>
+                <span><i class="legend-dot"></i>Eye position</span>
+              </span>
+            </figcaption>
+            <div class="canvas-stage">
+              <canvas
+                id="truth-canvas"
+                width="1280"
+                height="720"
+                aria-label="Static natural scene. Click a location to inspect its best decoded patch."
+              ></canvas>
+              <span class="scene-click-hint">Click to inspect a patch</span>
+              <div id="scene-magnifier" class="scene-magnifier" hidden aria-hidden="true">
+                <canvas id="scene-magnifier-canvas" width="112" height="112"></canvas>
+              </div>
+              <div class="screen-scale" aria-label="Screen size 34.1 by 19.2 degrees">
+                <span class="screen-scale-x"><i></i><b>34.1°</b></span>
+                <span class="screen-scale-y"><i></i><b>19.2°</b></span>
+              </div>
+            </div>
+          </figure>
+
+          <figure id="density-panel" class="visual-panel" hidden>
+            <figcaption>
+              <span>Fixation density</span>
+              <span class="panel-legend">
+                <span><i class="legend-line legend-hull"></i>Hull</span>
+              </span>
+            </figcaption>
+            <canvas id="density-canvas" width="1280" height="720"></canvas>
+          </figure>
+
+          <figure class="visual-panel">
+            <figcaption>
+              <span>Decoded patches</span>
+            </figcaption>
+            <canvas id="evidence-canvas" width="1280" height="720"></canvas>
+          </figure>
+
+          <figure class="visual-panel">
+            <figcaption>
+              <span>1/f reconstruction</span>
+            </figcaption>
+            <canvas id="posterior-canvas" width="1280" height="720"></canvas>
+          </figure>
+        </div>
+
+        <aside id="patch-drawer" class="decoder-drawer" hidden>
+          <div class="decoder-heading">
+            <div>
+              <p>From spikes to patch</p>
+              <span id="patch-fixation">Choose a fixation</span>
+            </div>
+          </div>
+          <div class="decoder-flow">
+            <figure class="raster-figure">
+              <figcaption>Population activity</figcaption>
+              <div class="raster-plot">
+                <span class="raster-cell-scale" aria-label="Recorded cells in this trial">
+                  <i></i><b id="raster-cells">— cells</b>
+                </span>
+                <canvas id="raster-canvas" width="640" height="200"></canvas>
+                <span class="raster-axis"><i>0 s</i><i>Trial time</i><i id="raster-duration">—</i></span>
+              </div>
+            </figure>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="network-box" aria-label="Decoder network: input 100 milliseconds of neural activity; output gaze-contingent patch">
+              <strong>Decoder network</strong>
+              <span><small>Input</small>100 ms neural activity</span>
+              <span><small>Output</small>Gaze-contingent patch</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <figure class="patch-figure">
+              <figcaption>Decoded</figcaption>
+              <div class="patch-scale-wrap patch-scale-placeholder">
+                <canvas id="patch-canvas" width="210" height="210"></canvas>
+              </div>
+            </figure>
+            <figure class="patch-figure ground-truth-patch">
+              <figcaption>Ground truth</figcaption>
+              <div class="patch-scale-wrap">
+                <canvas id="ground-truth-patch-canvas" width="210" height="210"></canvas>
+                <span class="patch-scale-x"><i></i><b>0.56°</b></span>
+                <span class="patch-scale-y"><i></i><b>0.56°</b></span>
+              </div>
+            </figure>
+          </div>
+        </aside>
+
+        <div class="transport" aria-label="Playback controls">
+          <button id="play" type="button" aria-pressed="false">Play</button>
+          <label class="scrubber">
+            <span class="sr-only">Fixation</span>
+            <input id="timeline" type="range" min="0" max="1" value="0" aria-describedby="keyboard-hint" />
+          </label>
+          <output id="progress" aria-live="polite">
+            <span><small>Fixation</small><b id="progress-fixation">0 / 0</b></span>
+            <span><small>Viewing time</small><b id="progress-time">0:00 / 0:00</b></span>
+          </output>
+          <label class="speed-control">
+            <span>Speed</span>
+            <select id="speed" aria-label="Playback speed">
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
+          </label>
+        </div>
+
+        <video
+          id="replay-video"
+          class="replay-source"
+          muted
+          playsinline
+          preload="auto"
+          tabindex="-1"
+          aria-hidden="true"
+        ></video>
+
+        <p id="load-status" class="load-status">Loading scene data…</p>
+      </section>
+
+      <section class="endmatter" aria-label="End matter">
+        <div class="endmatter-row" id="acknowledgments">
+          <div class="endmatter-title">
+            <h2>Acknowledgments</h2>
+          </div>
+          <div class="endmatter-body">
+            <p>
+              Thanks Eero Simoncelli for inspiring me to do this project at CSHL and for incredibly
+              helpful conversations about how to implement this.
+            </p>
+            <p>
+              Thanks Bruno Olshausen for suggesting a 1/f prior, which was crucial for cleaning up
+              the reconstruction.
+            </p>
+            <p>Thanks Jacob Yates for the infinite wisdom and support, as always.</p>
+            <p>
+              Thanks to my best friend
+              <a href="https://www.linkedin.com/in/ashwinnathan00/">Ashwin Nathan</a>
+              for giving me access to Codex.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
