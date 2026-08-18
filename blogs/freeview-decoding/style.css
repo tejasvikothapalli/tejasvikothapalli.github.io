@@ -238,19 +238,26 @@
   gap: 8px;
 }
 
-.panel-grid.density-visible {
+.panel-grid.density-visible,
+.panel-grid.fidelity-visible {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.panel-grid.density-visible.fidelity-visible {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 @media (min-width: 901px) {
-  .panel-grid.density-visible .visual-panel figcaption {
+  .panel-grid.density-visible .visual-panel figcaption,
+  .panel-grid.fidelity-visible .visual-panel figcaption {
     align-items: flex-start;
     flex-direction: column;
     justify-content: flex-start;
     min-height: 92px;
   }
 
-  .panel-grid.density-visible .panel-legend {
+  .panel-grid.density-visible .panel-legend,
+  .panel-grid.fidelity-visible .panel-legend {
     flex-wrap: wrap;
     gap: 4px 7px;
   }
@@ -863,7 +870,9 @@
   }
 
   .panel-grid,
-  .panel-grid.density-visible {
+  .panel-grid.density-visible,
+  .panel-grid.fidelity-visible,
+  .panel-grid.density-visible.fidelity-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -877,7 +886,9 @@
     grid-template-columns: 1fr;
   }
 
-  .panel-grid.density-visible {
+  .panel-grid.density-visible,
+  .panel-grid.fidelity-visible,
+  .panel-grid.density-visible.fidelity-visible {
     grid-template-columns: 1fr;
   }
 
@@ -953,5 +964,146 @@
 @media (hover: none) and (pointer: coarse) {
   .keyboard-instruction {
     display: none;
+  }
+}
+
+/* Reconstruction fidelity ------------------------------------------------- */
+
+/* A column peer of the image panels. The plot is a 1280x720 canvas like the
+   others, so `.visual-panel canvas` already handles all the scaling. */
+.fidelity-panel {
+  /* The same dark plate as the image panels; the plot is always drawn on it,
+     so these do not change with the page theme. */
+  --fidelity-surface: #090e16;
+  --fidelity-posterior: #3987e5;
+  --fidelity-evidence: #d95926;
+  --fidelity-grid: rgba(255, 255, 255, 0.14);
+  --fidelity-axis: rgba(255, 255, 255, 0.34);
+  --fidelity-ink: rgba(255, 255, 255, 0.94);
+  --fidelity-label: rgba(255, 255, 255, 0.9);
+  --fidelity-muted: rgba(255, 255, 255, 0.74);
+}
+
+#fidelity-canvas {
+  background: var(--fidelity-surface);
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+
+.legend-posterior {
+  width: 12px;
+  border-color: var(--fidelity-posterior);
+}
+
+.legend-evidence {
+  width: 12px;
+  border-top-style: dashed;
+  border-color: var(--fidelity-evidence);
+}
+
+/* Two explicit rows -- title with the selector beside it, legend below -- so
+   the selector can never collide with the legend or change the panel height. */
+.visual-panel.fidelity-panel figcaption {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+}
+
+/* Grid items refuse to shrink below min-content by default, which pushed the
+   caption wider than its column. */
+.visual-panel.fidelity-panel figcaption > * {
+  min-width: 0;
+}
+
+.visual-panel.fidelity-panel figcaption > span:first-child {
+  white-space: normal;
+}
+
+.fidelity-metric {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.fidelity-legend {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 2px 7px;
+}
+
+.fidelity-metric select {
+  min-height: 15px;
+  max-width: 100%;
+  padding: 0 1px;
+  color: var(--text);
+  font: inherit;
+  font-size: 9px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.fidelity-readout {
+  margin-top: 8px;
+}
+
+.fidelity-readout[hidden] {
+  display: none;
+}
+
+.fidelity-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.fidelity-summary em {
+  color: var(--text);
+  font-style: normal;
+  font-weight: 620;
+}
+
+.fidelity-note {
+  margin: 2px 0 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Scene loading progress -------------------------------------------------- */
+
+.load-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.load-progress {
+  flex: 1;
+  max-width: 260px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.load-progress[hidden] {
+  display: none;
+}
+
+.load-progress-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--link);
+  transition: width 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .load-progress-bar {
+    transition: none;
   }
 }

@@ -101,6 +101,9 @@
             <button id="patch-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="patch-drawer">
               Show patch decoder
             </button>
+            <button id="fidelity-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="fidelity-panel">
+              Show fidelity curve
+            </button>
           </div>
         </div>
 
@@ -175,6 +178,35 @@
             </figcaption>
             <canvas id="posterior-canvas" width="1280" height="720"></canvas>
           </figure>
+
+          <figure id="fidelity-panel" class="visual-panel fidelity-panel" hidden>
+            <figcaption>
+              <span>Reconstruction fidelity</span>
+              <label class="fidelity-metric">
+                <span class="sr-only">Fidelity metric</span>
+                <select id="fidelity-metric" aria-label="Fidelity metric">
+                  <option value="psnr" selected>PSNR (dB)</option>
+                  <option value="rmse">RMSE</option>
+                  <option value="correlation">Correlation</option>
+                </select>
+              </label>
+              <span class="panel-legend fidelity-legend">
+                <span><i class="legend-line legend-posterior"></i>1/f reconstruction</span>
+                <span><i class="legend-line legend-evidence"></i>Decoded patches</span>
+              </span>
+            </figcaption>
+            <canvas
+              id="fidelity-canvas"
+              width="1280"
+              height="720"
+              aria-label="Reconstruction fidelity against fixation count and viewing time. Click to jump the timeline."
+            ></canvas>
+          </figure>
+        </div>
+
+        <div id="fidelity-readout" class="fidelity-readout" hidden>
+          <p id="fidelity-summary" class="fidelity-summary" aria-live="polite"></p>
+          <p id="fidelity-note" class="fidelity-note"></p>
         </div>
 
         <aside id="patch-drawer" class="decoder-drawer" hidden>
@@ -251,7 +283,20 @@
           aria-hidden="true"
         ></video>
 
-        <p id="load-status" class="load-status">Loading scene data…</p>
+        <div class="load-state">
+          <p id="load-status" class="load-status">Loading scene data…</p>
+          <div
+            id="load-progress"
+            class="load-progress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="Scene loading progress"
+            hidden
+          >
+            <div id="load-progress-bar" class="load-progress-bar"></div>
+          </div>
+        </div>
       </section>
 
       <section class="endmatter" aria-label="End matter">

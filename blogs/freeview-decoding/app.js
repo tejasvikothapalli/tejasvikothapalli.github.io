@@ -6,6 +6,8 @@
   const viewer = document.querySelector("#viewer");
   const viewerTitle = document.querySelector("#viewer-title");
   const loadStatus = document.querySelector("#load-status");
+  const loadProgress = document.querySelector("#load-progress");
+  const loadProgressBar = document.querySelector("#load-progress-bar");
   const dateLabel = document.querySelector("#date-label");
   const trialLabel = document.querySelector("#trial-label");
   const sessionCells = document.querySelector("#session-cells");
@@ -26,6 +28,12 @@
   const replayVideo = document.querySelector("#replay-video");
   const sceneMagnifier = document.querySelector("#scene-magnifier");
   const sceneMagnifierCanvas = document.querySelector("#scene-magnifier-canvas");
+  const fidelityToggle = document.querySelector("#fidelity-toggle");
+  const fidelityPanel = document.querySelector("#fidelity-panel");
+  const fidelitySummary = document.querySelector("#fidelity-summary");
+  const fidelityReadout = document.querySelector("#fidelity-readout");
+  const fidelityNote = document.querySelector("#fidelity-note");
+  const fidelityMetric = document.querySelector("#fidelity-metric");
 
   const canvases = {
     truth: document.querySelector("#truth-canvas"),
@@ -35,6 +43,7 @@
     raster: document.querySelector("#raster-canvas"),
     groundTruthPatch: document.querySelector("#ground-truth-patch-canvas"),
     patch: document.querySelector("#patch-canvas"),
+    fidelity: document.querySelector("#fidelity-canvas"),
   };
 
   const state = {
@@ -61,9 +70,11 @@
     arrowTimer: 0,
     arrowDirection: 0,
     arrowStartedAt: 0,
+    fidelityMetric: "psnr",
   };
 
   speed.value = String(state.speed);
+  fidelityMetric.value = state.fidelityMetric;
 
   const colors = {
     outside: "#090e16",
@@ -127,6 +138,28 @@
   function setBusy(isBusy, message = "Loading scene data…") {
     viewer.setAttribute("aria-busy", String(isBusy));
     loadStatus.textContent = message;
+    if (!isBusy) setLoadProgress(null);
+  }
+
+  // The replay is by far the largest asset, so its download drives the bar.
+  function setLoadProgress(fraction, secondsLeft) {
+    if (fraction === null) {
+      loadProgress.hidden = true;
+      loadProgressBar.style.width = "0%";
+      loadProgress.removeAttribute("aria-valuenow");
+      return;
+    }
+    const percent = Math.max(0, Math.min(1, fraction)) * 100;
+    loadProgress.hidden = false;
+    loadProgressBar.style.width = `${percent.toFixed(1)}%`;
+    loadProgress.setAttribute("aria-valuenow", String(Math.round(percent)));
+    const remaining =
+      secondsLeft === undefined || !Number.isFinite(secondsLeft) || secondsLeft < 0
+        ? ""
+        : secondsLeft < 1
+          ? " · almost done"
+          : ` · about ${Math.ceil(secondsLeft)}s left`;
+    loadStatus.textContent = `Loading replay… ${Math.round(percent)}%${remaining}`;
   }
 
   function setPlaying(value) {
@@ -470,26 +503,418 @@
     const totalBins = scene.rasterTrials.reduce((sum, trial) => sum + trial.bins, 0);
     const secondsPerBin = scene.recordingSeconds / totalBins;
     let elapsedBins = 0;
-    scene.viewingTrialStarts = scene.rasterTrials.map((trial) => {
+    const trialStarts = scene.rasterTrials.map((trial) => {
       const start = elapsedBins * secondsPerBin;
       elapsedBins += trial.bins;
       return start;
     });
-    scene.viewingSecondsPerBin = secondsPerBin;
+    // Elapsed viewing time for every scrubber position, forced non-decreasing so
+    // the fidelity chart can invert it to place viewing-time ticks.
+    const seconds = new Float64Array(scene.total + 1);
+    let running = 0;
+    for (let count = 1; count < scene.total; count += 1) {
+      const fixationIndex = count - 1;
+      const trialIndex = scene.rasterTrial[fixationIndex];
+      const withinTrialBins = scene.rasterWindow[fixationIndex * 2 + 1];
+      running = Math.max(running, trialStarts[trialIndex] + withinTrialBins * secondsPerBin);
+      seconds[count] = running;
+    }
+    seconds[scene.total] = Math.max(running, scene.recordingSeconds);
+    scene.viewingSeconds = seconds;
   }
 
   function viewingSecondsAtCount(count) {
-    if (count <= 0) return 0;
-    if (count >= state.scene.total) return state.scene.recordingSeconds;
-    const fixationIndex = count - 1;
-    const trialIndex = state.scene.rasterTrial[fixationIndex];
-    const withinTrialBins = state.scene.rasterWindow[fixationIndex * 2 + 1];
-    return (
-      state.scene.viewingTrialStarts[trialIndex] +
-      withinTrialBins * state.scene.viewingSecondsPerBin
+    const seconds = state.scene.viewingSeconds;
+    const index = Math.max(0, Math.min(state.scene.total, Math.round(count)));
+    return seconds[index];
+  }
+
+  function countAtViewingSeconds(target) {
+    const seconds = state.scene.viewingSeconds;
+    let low = 0;
+    let high = state.scene.total;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (seconds[middle] < target) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  }
+
+  // Reconstruction fidelity -------------------------------------------------
+  //
+  // Every curve point is precomputed in scene.json. The plot is drawn at a
+  // fixed 1280x720 like every other panel canvas, so CSS scaling keeps it
+  // proportional at any panel width instead of reflowing.
+
+  const FIDELITY_METRICS = {
+    psnr: { axis: "PSNR (dB)", short: "PSNR", suffix: " dB", digits: 2 },
+    rmse: { axis: "RMSE (intensity)", short: "RMSE", suffix: "", digits: 4 },
+    correlation: { axis: "Correlation (r)", short: "r", suffix: "", digits: 3 },
+  };
+
+  const FIDELITY_SERIES = [
+    { key: "posterior", label: "1/f reconstruction", color: "--fidelity-posterior", dash: [] },
+    { key: "evidence", label: "Decoded patches", color: "--fidelity-evidence", dash: [26, 18] },
+  ];
+
+  // Layout is always computed in this fixed coordinate space, so the plot can
+  // never reflow with panel width. Only the backing-store resolution tracks the
+  // display size, which keeps the type crisp instead of downscaled.
+  const FIDELITY_VIEW = { width: 1280, height: 720 };
+  const FIDELITY_PLOT = { right: 52, top: 74, bottom: 178 };
+  const FIDELITY_ROWS = ["Fixations", "Viewing time"];
+
+  function niceTicks(minimum, maximum, target) {
+    const span = maximum - minimum;
+    if (!(span > 0)) return [minimum];
+    const magnitude = 10 ** Math.floor(Math.log10(span / target));
+    const step =
+      [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((value) => value >= span / target) ??
+      10 * magnitude;
+    const ticks = [];
+    for (
+      let value = Math.ceil(minimum / step) * step;
+      value <= maximum + step * 1e-6;
+      value += step
+    ) {
+      ticks.push(Number(value.toPrecision(12)));
+    }
+    return ticks;
+  }
+
+  function formatMetric(value, metric) {
+    return `${value.toFixed(metric.digits)}${metric.suffix}`;
+  }
+
+  function fidelityValueAt(values, counts, count) {
+    if (count <= counts[0]) return values[0];
+    const last = counts.length - 1;
+    if (count >= counts[last]) return values[last];
+    let low = 0;
+    let high = last;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (counts[middle] < count) low = middle + 1;
+      else high = middle;
+    }
+    const upper = low;
+    const lower = Math.max(0, upper - 1);
+    const span = counts[upper] - counts[lower];
+    if (span <= 0) return values[upper];
+    const weight = (count - counts[lower]) / span;
+    return values[lower] + weight * (values[upper] - values[lower]);
+  }
+
+  function gainMilestone(values, counts, fraction) {
+    const baseline = values[0];
+    const final = values[values.length - 1];
+    const span = final - baseline;
+    if (Math.abs(span) < 1e-9) return null;
+    const target = baseline + fraction * span;
+    const reached = (value) => (span > 0 ? value >= target : value <= target);
+    for (let index = 1; index < values.length; index += 1) {
+      if (!reached(values[index])) continue;
+      const previous = values[index - 1];
+      const step = values[index] - previous;
+      const weight = Math.abs(step) < 1e-12 ? 0 : (target - previous) / step;
+      return Math.max(
+        1,
+        Math.round(counts[index - 1] + weight * (counts[index] - counts[index - 1])),
+      );
+    }
+    return null;
+  }
+
+  function fidelityAvailable() {
+    return Boolean(state.scene?.fidelity?.counts?.length);
+  }
+
+  function prepareFidelity(scene) {
+    if (!scene.fidelity?.counts?.length) return;
+    scene.fidelity.milestones = Object.fromEntries(
+      Object.keys(FIDELITY_METRICS).map((key) => {
+        const values = scene.fidelity.series.posterior[key];
+        return [
+          key,
+          {
+            half: gainMilestone(values, scene.fidelity.counts, 0.5),
+            most: gainMilestone(values, scene.fidelity.counts, 0.9),
+          },
+        ];
+      }),
+    );
+    // The curve is built either from the full-resolution latent or from the
+    // displayed replay panels; say which, because it shifts absolute values.
+    const resolution =
+      scene.fidelity.schema >= 2
+        ? "on the 512 × 288 panels this page displays"
+        : "at the full 1280 × 720 canvas resolution";
+    fidelityNote.textContent =
+      `Both curves score the same held-out scene inside the hull, ${resolution}. ` +
+      `Decoded patches only is the raw evidence image — every decoded patch dropped at its ` +
+      `gaze location and averaged where they overlap, with never-fixated pixels left at the ` +
+      `prior mean — so the gap between the curves is what the 1/f prior adds. Bottom axis: ` +
+      `fixations. Top axis: elapsed viewing time. Click the curve to jump the timeline there.`;
+  }
+
+  function fidelityGeometry() {
+    const scene = state.scene;
+    const values = scene.fidelity.series;
+    const metricKey = state.fidelityMetric;
+    let minimum = Infinity;
+    let maximum = -Infinity;
+    for (const definition of FIDELITY_SERIES) {
+      for (const value of values[definition.key][metricKey]) {
+        if (value < minimum) minimum = value;
+        if (value > maximum) maximum = value;
+      }
+    }
+    const pad = Math.max((maximum - minimum) * 0.08, 1e-6);
+    minimum -= pad;
+    maximum += pad;
+    // A scratch context, so measuring never disturbs the display transform.
+    const measure = fidelityMeasureContext();
+    const family = getComputedStyle(document.body).fontFamily;
+    const metric = FIDELITY_METRICS[metricKey];
+    measure.font = `46px ${family}`;
+    const tickWidth = Math.max(
+      ...niceTicks(minimum, maximum, 5).map(
+        (value) => measure.measureText(String(Number(value.toFixed(metric.digits + 1)))).width,
+      ),
+    );
+    measure.font = `600 44px ${family}`;
+    const labelWidth = Math.max(...FIDELITY_ROWS.map((text) => measure.measureText(text).width));
+    const left = Math.ceil(Math.max(tickWidth, labelWidth)) + 30;
+    const right = FIDELITY_VIEW.width - FIDELITY_PLOT.right;
+    const top = FIDELITY_PLOT.top;
+    const bottom = FIDELITY_VIEW.height - FIDELITY_PLOT.bottom;
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      minimum,
+      maximum,
+      metricKey,
+      metric,
+      x: (count) => left + (count / scene.total) * (right - left),
+      y: (value) => bottom - ((value - minimum) / (maximum - minimum)) * (bottom - top),
+    };
+  }
+
+  let fidelityMeasureCanvas = null;
+
+  function fidelityMeasureContext() {
+    if (!fidelityMeasureCanvas) fidelityMeasureCanvas = document.createElement("canvas");
+    return fidelityMeasureCanvas.getContext("2d");
+  }
+
+  function fidelityContext() {
+    const canvas = canvases.fidelity;
+    const bounds = canvas.getBoundingClientRect();
+    if (bounds.width < 2) return null;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.round(bounds.width * ratio);
+    const height = Math.round((bounds.width * FIDELITY_VIEW.height) / FIDELITY_VIEW.width * ratio);
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    const context = canvas.getContext("2d");
+    context.setTransform(width / FIDELITY_VIEW.width, 0, 0, height / FIDELITY_VIEW.height, 0, 0);
+    return context;
+  }
+
+  function drawFidelity() {
+    if (fidelityPanel.hidden || !fidelityAvailable()) return;
+    const scene = state.scene;
+    const fidelity = scene.fidelity;
+    const context = fidelityContext();
+    if (!context) return;
+    const styles = getComputedStyle(fidelityPanel);
+    const ink = styles.getPropertyValue("--fidelity-ink").trim();
+    const muted = styles.getPropertyValue("--fidelity-muted").trim();
+    const label = styles.getPropertyValue("--fidelity-label").trim();
+    const gridColor = styles.getPropertyValue("--fidelity-grid").trim();
+    const axisColor = styles.getPropertyValue("--fidelity-axis").trim();
+    const surface = styles.getPropertyValue("--fidelity-surface").trim();
+    context.fillStyle = surface;
+    context.fillRect(0, 0, FIDELITY_VIEW.width, FIDELITY_VIEW.height);
+    const plot = fidelityGeometry();
+    const family = getComputedStyle(document.body).fontFamily;
+    const tickFont = `46px ${family}`;
+    const labelFont = `600 44px ${family}`;
+
+    context.font = tickFont;
+    context.textBaseline = "middle";
+    for (const value of niceTicks(plot.minimum, plot.maximum, 5)) {
+      const y = plot.y(value);
+      context.strokeStyle = gridColor;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(plot.left, y);
+      context.lineTo(plot.right, y);
+      context.stroke();
+      context.fillStyle = muted;
+      context.textAlign = "right";
+      context.fillText(String(Number(value.toFixed(plot.metric.digits + 1))), plot.left - 18, y);
+    }
+
+    context.strokeStyle = axisColor;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(plot.left, plot.bottom);
+    context.lineTo(plot.right, plot.bottom);
+    context.stroke();
+
+    // Both measures read along the bottom, one labelled row each.
+    const rowLabel = (text, y) => {
+      context.font = labelFont;
+      context.fillStyle = label;
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      context.fillText(text, plot.left - 18, y);
+    };
+    const tickRow = (positions, y) => {
+      context.font = tickFont;
+      context.textBaseline = "middle";
+      for (const [x, text, align] of positions) {
+        context.strokeStyle = axisColor;
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(x, y - 30);
+        context.lineTo(x, y - 18);
+        context.stroke();
+        context.fillStyle = muted;
+        context.textAlign = align;
+        context.fillText(text, x, y);
+      }
+    };
+
+    const fixationRowY = plot.bottom + 48;
+    const timeRowY = plot.bottom + 128;
+    const xTicks = niceTicks(0, scene.total, 3).filter((count) => count <= scene.total);
+    tickRow(
+      xTicks.map((count, index) => [
+        plot.x(count),
+        count.toLocaleString(),
+        index === 0 ? "left" : index === xTicks.length - 1 ? "right" : "center",
+      ]),
+      fixationRowY,
+    );
+    rowLabel(FIDELITY_ROWS[0], fixationRowY);
+
+    const span = scene.viewingSeconds[scene.total];
+    const timeStep = [15, 30, 60, 120, 300, 600, 900].find((step) => span / step <= 4) ?? 1800;
+    const timeTicks = [];
+    for (let seconds = 0; seconds <= span + 1; seconds += timeStep) {
+      const x = plot.x(seconds <= 0 ? 0 : countAtViewingSeconds(seconds));
+      if (x > plot.right - 10) continue;
+      timeTicks.push([x, formatViewingTime(seconds), timeTicks.length === 0 ? "left" : "center"]);
+    }
+    tickRow(timeTicks, timeRowY);
+    rowLabel(FIDELITY_ROWS[1], timeRowY);
+
+    context.font = labelFont;
+    context.fillStyle = label;
+    context.textAlign = "left";
+    context.textBaseline = "alphabetic";
+    context.fillText(plot.metric.axis, plot.left, plot.top - 24);
+
+    // Identity comes from the caption legend plus solid/dashed.
+    const strokes = FIDELITY_SERIES.map((definition) => ({
+      ...definition,
+      values: fidelity.series[definition.key][plot.metricKey],
+      stroke: styles.getPropertyValue(definition.color).trim(),
+    }));
+    for (const entry of strokes) {
+      context.save();
+      context.beginPath();
+      fidelity.counts.forEach((count, index) => {
+        const x = plot.x(count);
+        const y = plot.y(entry.values[index]);
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.strokeStyle = entry.stroke;
+      context.lineWidth = 7;
+      context.lineJoin = "round";
+      context.lineCap = "round";
+      context.setLineDash(entry.dash);
+      context.stroke();
+      context.restore();
+    }
+
+    const markerX = plot.x(state.count);
+    context.save();
+    context.globalAlpha = 0.62;
+    context.strokeStyle = ink;
+    context.lineWidth = 5;
+    context.beginPath();
+    context.moveTo(markerX, plot.top);
+    context.lineTo(markerX, plot.bottom);
+    context.stroke();
+    context.restore();
+    for (const entry of strokes) {
+      const value = fidelityValueAt(entry.values, fidelity.counts, state.count);
+      context.beginPath();
+      context.arc(markerX, plot.y(value), 15, 0, Math.PI * 2);
+      context.fillStyle = entry.stroke;
+      context.fill();
+      context.strokeStyle = surface;
+      context.lineWidth = 6;
+      context.stroke();
+    }
+
+    updateFidelitySummary(plot, strokes);
+  }
+
+  function updateFidelitySummary(plot, strokes) {
+    const counts = state.scene.fidelity.counts;
+    const metric = plot.metric;
+    const posterior = strokes[0].values;
+    const current = fidelityValueAt(posterior, counts, state.count);
+    const baseline = posterior[0];
+    const final = posterior[posterior.length - 1];
+    const span = final - baseline;
+    const gain = Math.abs(span) < 1e-9 ? 1 : (current - baseline) / span;
+    const milestones = state.scene.fidelity.milestones[plot.metricKey];
+    const milestoneText = (reached) =>
+      reached == null
+        ? "—"
+        : `fixation ${reached.toLocaleString()} (${formatViewingTime(viewingSecondsAtCount(reached))})`;
+    const pace =
+      milestones.half == null && milestones.most == null
+        ? ""
+        : ` Half that gain by ${milestoneText(milestones.half)}, 90% by ${milestoneText(milestones.most)}.`;
+
+    fidelitySummary.replaceChildren(
+      Object.assign(document.createElement("em"), {
+        textContent: `${metric.short} ${formatMetric(current, metric)}`,
+      }),
+      document.createTextNode(
+        ` at fixation ${state.count.toLocaleString()} · ${formatViewingTime(viewingSecondsAtCount(state.count))}` +
+          ` — ${Math.round(Math.max(0, Math.min(1, gain)) * 100)}% of the way from the 1/f prior alone` +
+          ` (${formatMetric(baseline, metric)}) to the final ${formatMetric(final, metric)}.` +
+          pace,
+      ),
     );
   }
 
+  function setFidelityVisible(show, { scroll = false } = {}) {
+    fidelityPanel.hidden = !show;
+    fidelityReadout.hidden = !show;
+    panelGrid.classList.toggle("fidelity-visible", show);
+    fidelityToggle.setAttribute("aria-pressed", String(show));
+    fidelityToggle.textContent = show ? "Hide fidelity curve" : "Show fidelity curve";
+    paint();
+    if (show && scroll) {
+      requestAnimationFrame(() => {
+        fidelityPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
+  }
   function drawPatch(current) {
     drawRaster(current);
     const truthCanvas = canvases.groundTruthPatch;
@@ -636,6 +1061,7 @@
     }
 
     if (!patchDrawer.hidden) drawPatch(current);
+    drawFidelity();
     timeline.value = String(state.count);
     progressFixation.textContent = `${state.count.toLocaleString()} / ${state.scene.total.toLocaleString()}`;
     progressTime.textContent = `${formatViewingTime(viewingSecondsAtCount(state.count))} / ${formatViewingTime(state.scene.recordingSeconds)}`;
@@ -759,7 +1185,7 @@
     state.replayAbort = abort;
     const response = await fetch(path, { signal: abort.signal });
     if (!response.ok) throw new Error(`Fixation replay returned ${response.status}`);
-    const blob = await response.blob();
+    const blob = await readWithProgress(response, token);
     if (token !== state.loadToken) return;
     state.replayAbort = null;
     state.replayObjectUrl = URL.createObjectURL(blob);
@@ -777,7 +1203,32 @@
     state.videoSeeking = false;
   }
 
+  async function readWithProgress(response, token) {
+    const expected = Number(response.headers.get("content-length")) || 0;
+    if (!expected || !response.body?.getReader) return response.blob();
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+    const started = performance.now();
+    setLoadProgress(0);
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (token !== state.loadToken) {
+        reader.cancel().catch(() => undefined);
+        break;
+      }
+      const elapsed = (performance.now() - started) / 1000;
+      const rate = elapsed > 0.15 ? received / elapsed : 0;
+      setLoadProgress(received / expected, rate > 0 ? (expected - received) / rate : undefined);
+    }
+    return new Blob(chunks, { type: response.headers.get("content-type") || "video/mp4" });
+  }
+
   function releaseReplay() {
+    setLoadProgress(null);
     if (state.replayAbort) state.replayAbort.abort();
     state.replayAbort = null;
     state.videoReady = false;
@@ -815,6 +1266,7 @@
       if (token !== state.loadToken) return;
       state.scene = scene;
       prepareViewingTimeline(scene);
+      prepareFidelity(scene);
       state.images = Object.fromEntries(names.map((name, index) => [name, loaded[index]]));
       state.assetPaths = paths;
       state.patchPromise = null;
@@ -824,6 +1276,7 @@
       state.count = scene.total;
       state.fractionalCount = scene.total;
       viewerTitle.textContent = record.title;
+      fidelityToggle.disabled = !fidelityAvailable();
       paint();
       if (paths.replay) await loadReplay(paths.replay, scene.total, token);
       if (token !== state.loadToken) return;
@@ -966,6 +1419,25 @@
     setPatchDrawerVisible(patchDrawer.hidden, { scroll: true });
   });
 
+  fidelityToggle.addEventListener("click", () => {
+    setFidelityVisible(fidelityPanel.hidden, { scroll: true });
+  });
+
+  fidelityMetric.addEventListener("change", () => {
+    state.fidelityMetric = fidelityMetric.value;
+    drawFidelity();
+  });
+
+  canvases.fidelity.addEventListener("click", (event) => {
+    if (!fidelityAvailable() || viewer.getAttribute("aria-busy") === "true") return;
+    const bounds = canvases.fidelity.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width) * FIDELITY_VIEW.width;
+    const plot = fidelityGeometry();
+    const fraction = (x - plot.left) / (plot.right - plot.left);
+    setPlaying(false);
+    setCount(Math.max(0, Math.min(state.scene.total, Math.round(fraction * state.scene.total))));
+  });
+
   densityToggle.addEventListener("click", () => {
     const show = densityPanel.hidden;
     densityPanel.hidden = !show;
@@ -986,6 +1458,14 @@
   document.addEventListener("keyup", (event) => {
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     stopArrowHold();
+  });
+
+  // Only the backing-store resolution depends on window size; the plot layout
+  // is fixed in virtual coordinates, so this cannot reflow the chart.
+  let fidelityResizeTimer = 0;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(fidelityResizeTimer);
+    fidelityResizeTimer = window.setTimeout(drawFidelity, 120);
   });
 
   window.addEventListener("blur", stopArrowHold);
