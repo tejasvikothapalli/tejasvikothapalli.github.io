@@ -30,10 +30,26 @@
   const sceneMagnifierCanvas = document.querySelector("#scene-magnifier-canvas");
   const fidelityToggle = document.querySelector("#fidelity-toggle");
   const fidelityPanel = document.querySelector("#fidelity-panel");
-  const fidelitySummary = document.querySelector("#fidelity-summary");
-  const fidelityReadout = document.querySelector("#fidelity-readout");
-  const fidelityNote = document.querySelector("#fidelity-note");
   const fidelityMetric = document.querySelector("#fidelity-metric");
+  const langevinToggle = document.querySelector("#langevin-toggle");
+  const langevinPanel = document.querySelector("#langevin-panel");
+  const langevinReadout = document.querySelector("#langevin-readout");
+  const langevinRun = document.querySelector("#langevin-run");
+  const langevinReset = document.querySelector("#langevin-reset");
+  const langevinEta = document.querySelector("#langevin-eta");
+  const langevinEtaValue = document.querySelector("#langevin-eta-value");
+  const langevinTemperature = document.querySelector("#langevin-temperature");
+  const langevinTemperatureValue = document.querySelector("#langevin-temperature-value");
+  const langevinSnr = document.querySelector("#langevin-snr");
+  const langevinSnrValue = document.querySelector("#langevin-snr-value");
+  const langevinIterations = document.querySelector("#langevin-iterations");
+  const langevinDeviation = document.querySelector("#langevin-deviation");
+  const unlockDialog = document.querySelector("#unlock-dialog");
+  const unlockForm = document.querySelector("#unlock-form");
+  const unlockPassword = document.querySelector("#unlock-password");
+  const unlockError = document.querySelector("#unlock-error");
+  const unlockCancel = document.querySelector("#unlock-cancel");
+  const unlockSubmit = document.querySelector("#unlock-submit");
 
   const canvases = {
     truth: document.querySelector("#truth-canvas"),
@@ -44,6 +60,7 @@
     groundTruthPatch: document.querySelector("#ground-truth-patch-canvas"),
     patch: document.querySelector("#patch-canvas"),
     fidelity: document.querySelector("#fidelity-canvas"),
+    langevin: document.querySelector("#langevin-canvas"),
   };
 
   const state = {
@@ -71,10 +88,25 @@
     arrowDirection: 0,
     arrowStartedAt: 0,
     fidelityMetric: "psnr",
+    langevin: {
+      worker: null,
+      token: -1,
+      mask: null,
+      running: false,
+      failed: false,
+      lastSync: 0,
+      canvas: null,
+      source: null,
+    },
+    restricted: { index: null, key: null, thumbs: new Map(), urls: [] },
   };
 
   speed.value = String(state.speed);
   fidelityMetric.value = state.fidelityMetric;
+  langevinEtaValue.textContent = Number(langevinEta.value).toFixed(3);
+  langevinTemperatureValue.textContent = Number(langevinTemperature.value).toFixed(2);
+  langevinSnrValue.textContent = Number(langevinSnr.value).toFixed(1);
+  updatePanelColumns();
 
   const colors = {
     outside: "#090e16",
@@ -583,10 +615,6 @@
     return ticks;
   }
 
-  function formatMetric(value, metric) {
-    return `${value.toFixed(metric.digits)}${metric.suffix}`;
-  }
-
   function fidelityValueAt(values, counts, count) {
     if (count <= counts[0]) return values[0];
     const last = counts.length - 1;
@@ -606,56 +634,8 @@
     return values[lower] + weight * (values[upper] - values[lower]);
   }
 
-  function gainMilestone(values, counts, fraction) {
-    const baseline = values[0];
-    const final = values[values.length - 1];
-    const span = final - baseline;
-    if (Math.abs(span) < 1e-9) return null;
-    const target = baseline + fraction * span;
-    const reached = (value) => (span > 0 ? value >= target : value <= target);
-    for (let index = 1; index < values.length; index += 1) {
-      if (!reached(values[index])) continue;
-      const previous = values[index - 1];
-      const step = values[index] - previous;
-      const weight = Math.abs(step) < 1e-12 ? 0 : (target - previous) / step;
-      return Math.max(
-        1,
-        Math.round(counts[index - 1] + weight * (counts[index] - counts[index - 1])),
-      );
-    }
-    return null;
-  }
-
   function fidelityAvailable() {
     return Boolean(state.scene?.fidelity?.counts?.length);
-  }
-
-  function prepareFidelity(scene) {
-    if (!scene.fidelity?.counts?.length) return;
-    scene.fidelity.milestones = Object.fromEntries(
-      Object.keys(FIDELITY_METRICS).map((key) => {
-        const values = scene.fidelity.series.posterior[key];
-        return [
-          key,
-          {
-            half: gainMilestone(values, scene.fidelity.counts, 0.5),
-            most: gainMilestone(values, scene.fidelity.counts, 0.9),
-          },
-        ];
-      }),
-    );
-    // The curve is built either from the full-resolution latent or from the
-    // displayed replay panels; say which, because it shifts absolute values.
-    const resolution =
-      scene.fidelity.schema >= 2
-        ? "on the 512 × 288 panels this page displays"
-        : "at the full 1280 × 720 canvas resolution";
-    fidelityNote.textContent =
-      `Both curves score the same held-out scene inside the hull, ${resolution}. ` +
-      `Decoded patches only is the raw evidence image — every decoded patch dropped at its ` +
-      `gaze location and averaged where they overlap, with never-fixated pixels left at the ` +
-      `prior mean — so the gap between the curves is what the 1/f prior adds. Bottom axis: ` +
-      `fixations. Top axis: elapsed viewing time. Click the curve to jump the timeline there.`;
   }
 
   function fidelityGeometry() {
@@ -866,46 +846,11 @@
       context.lineWidth = 6;
       context.stroke();
     }
-
-    updateFidelitySummary(plot, strokes);
-  }
-
-  function updateFidelitySummary(plot, strokes) {
-    const counts = state.scene.fidelity.counts;
-    const metric = plot.metric;
-    const posterior = strokes[0].values;
-    const current = fidelityValueAt(posterior, counts, state.count);
-    const baseline = posterior[0];
-    const final = posterior[posterior.length - 1];
-    const span = final - baseline;
-    const gain = Math.abs(span) < 1e-9 ? 1 : (current - baseline) / span;
-    const milestones = state.scene.fidelity.milestones[plot.metricKey];
-    const milestoneText = (reached) =>
-      reached == null
-        ? "—"
-        : `fixation ${reached.toLocaleString()} (${formatViewingTime(viewingSecondsAtCount(reached))})`;
-    const pace =
-      milestones.half == null && milestones.most == null
-        ? ""
-        : ` Half that gain by ${milestoneText(milestones.half)}, 90% by ${milestoneText(milestones.most)}.`;
-
-    fidelitySummary.replaceChildren(
-      Object.assign(document.createElement("em"), {
-        textContent: `${metric.short} ${formatMetric(current, metric)}`,
-      }),
-      document.createTextNode(
-        ` at fixation ${state.count.toLocaleString()} · ${formatViewingTime(viewingSecondsAtCount(state.count))}` +
-          ` — ${Math.round(Math.max(0, Math.min(1, gain)) * 100)}% of the way from the 1/f prior alone` +
-          ` (${formatMetric(baseline, metric)}) to the final ${formatMetric(final, metric)}.` +
-          pace,
-      ),
-    );
   }
 
   function setFidelityVisible(show, { scroll = false } = {}) {
     fidelityPanel.hidden = !show;
-    fidelityReadout.hidden = !show;
-    panelGrid.classList.toggle("fidelity-visible", show);
+    updatePanelColumns();
     fidelityToggle.setAttribute("aria-pressed", String(show));
     fidelityToggle.textContent = show ? "Hide fidelity curve" : "Show fidelity curve";
     paint();
@@ -915,6 +860,244 @@
       });
     }
   }
+  // Langevin sampling ------------------------------------------------------
+  //
+  // The panel treats the displayed 1/f reconstruction as the image and runs the
+  // denoising post's Fourier-domain update on it (denoise.py / denoise.m),
+  // restricted to the robust hull. Everything happens in a worker so the replay
+  // keeps its frame rate; see langevin-worker.js for the update itself.
+
+  const LANGEVIN_WIDTH = 512;
+  const LANGEVIN_HEIGHT = 256;
+  const LANGEVIN_SYNC_MS = 120;
+
+  function langevinScratch() {
+    const langevin = state.langevin;
+    if (!langevin.canvas) {
+      langevin.canvas = document.createElement("canvas");
+      langevin.canvas.width = LANGEVIN_WIDTH;
+      langevin.canvas.height = LANGEVIN_HEIGHT;
+      langevin.source = document.createElement("canvas");
+      langevin.source.width = LANGEVIN_WIDTH;
+      langevin.source.height = LANGEVIN_HEIGHT;
+    }
+    return langevin;
+  }
+
+  // The hull polygon is stored in tenths of a display pixel; rasterize it once
+  // per scene onto the work grid.
+  function langevinHullMask(scene) {
+    const canvas = document.createElement("canvas");
+    canvas.width = LANGEVIN_WIDTH;
+    canvas.height = LANGEVIN_HEIGHT;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const scaleX = LANGEVIN_WIDTH / canvases.posterior.width;
+    const scaleY = LANGEVIN_HEIGHT / canvases.posterior.height;
+    context.beginPath();
+    context.moveTo((scene.hull[0] / 10) * scaleX, (scene.hull[1] / 10) * scaleY);
+    for (let index = 2; index < scene.hull.length; index += 2) {
+      context.lineTo((scene.hull[index] / 10) * scaleX, (scene.hull[index + 1] / 10) * scaleY);
+    }
+    context.closePath();
+    context.fillStyle = "#ffffff";
+    context.fill();
+    const pixels = context.getImageData(0, 0, LANGEVIN_WIDTH, LANGEVIN_HEIGHT).data;
+    const mask = new Uint8Array(LANGEVIN_WIDTH * LANGEVIN_HEIGHT);
+    for (let index = 0; index < mask.length; index += 1) {
+      mask[index] = pixels[index * 4 + 3] > 127 ? 1 : 0;
+    }
+    return mask;
+  }
+
+  // Sample the reconstruction the same way the posterior panel does, straight
+  // from the replay frame or the sprite, so the sampler never reads back the
+  // large display canvas.
+  function langevinObservation() {
+    const scene = state.scene;
+    const langevin = langevinScratch();
+    const context = langevin.source.getContext("2d", { willReadFrequently: true });
+    context.clearRect(0, 0, LANGEVIN_WIDTH, LANGEVIN_HEIGHT);
+    if (state.videoReady && !state.videoSeeking && replayVideo.readyState >= 2) {
+      context.drawImage(
+        replayVideo,
+        2 * scene.frameWidth,
+        0,
+        scene.frameWidth,
+        scene.frameHeight,
+        0,
+        0,
+        LANGEVIN_WIDTH,
+        LANGEVIN_HEIGHT,
+      );
+    } else {
+      const frameIndex = frameIndexForCount(state.count);
+      context.drawImage(
+        state.images.posterior,
+        (frameIndex % scene.spriteColumns) * scene.frameWidth,
+        Math.floor(frameIndex / scene.spriteColumns) * scene.frameHeight,
+        scene.frameWidth,
+        scene.frameHeight,
+        0,
+        0,
+        LANGEVIN_WIDTH,
+        LANGEVIN_HEIGHT,
+      );
+    }
+    const pixels = context.getImageData(0, 0, LANGEVIN_WIDTH, LANGEVIN_HEIGHT).data;
+    const observation = new Float32Array(LANGEVIN_WIDTH * LANGEVIN_HEIGHT);
+    for (let index = 0; index < observation.length; index += 1) {
+      const offset = index * 4;
+      observation[index] =
+        0.299 * pixels[offset] + 0.587 * pixels[offset + 1] + 0.114 * pixels[offset + 2];
+    }
+    return observation;
+  }
+
+  function langevinParams() {
+    return {
+      eta: Number(langevinEta.value),
+      snr: Number(langevinSnr.value),
+      temperature: Number(langevinTemperature.value),
+    };
+  }
+
+  function drawLangevinFrame(message) {
+    const langevin = langevinScratch();
+    const context = langevin.canvas.getContext("2d");
+    context.putImageData(
+      new ImageData(new Uint8ClampedArray(message.pixels), message.width, message.height),
+      0,
+      0,
+    );
+    const target = clearCanvas(canvases.langevin);
+    target.drawImage(langevin.canvas, 0, 0, canvases.langevin.width, canvases.langevin.height);
+    drawHull(target, state.scene.hull);
+    langevinIterations.textContent = `${message.iteration.toLocaleString()} steps`;
+    langevinDeviation.textContent = `${message.deviation.toFixed(1)} / 255`;
+  }
+
+  function langevinWorker() {
+    const langevin = state.langevin;
+    if (langevin.worker || langevin.failed) return langevin.worker;
+    if (typeof Worker === "undefined") {
+      langevin.failed = true;
+      return null;
+    }
+    try {
+      langevin.worker = new Worker("./langevin-worker.js");
+    } catch (error) {
+      console.error(error);
+      langevin.failed = true;
+      return null;
+    }
+    langevin.worker.addEventListener("message", (event) => {
+      const message = event.data;
+      if (message.type === "frame") {
+        if (!state.scene || langevinPanel.hidden) return;
+        drawLangevinFrame(message);
+        return;
+      }
+      if (message.type === "error") {
+        console.error(message.error);
+        langevinFailed();
+      }
+    });
+    langevin.worker.addEventListener("error", (event) => {
+      console.error(event.message || event);
+      langevinFailed();
+    });
+    return langevin.worker;
+  }
+
+  function langevinFailed() {
+    const langevin = state.langevin;
+    langevin.failed = true;
+    if (langevin.worker) langevin.worker.terminate();
+    langevin.worker = null;
+    langevin.token = -1;
+    langevinToggle.disabled = true;
+    langevinIterations.textContent = "unavailable";
+  }
+
+  function setLangevinRunning(running) {
+    const langevin = state.langevin;
+    langevin.running = running;
+    langevinRun.setAttribute("aria-pressed", String(running));
+    langevinRun.textContent = running ? "Pause sampling" : "Resume sampling";
+    if (langevin.worker) langevin.worker.postMessage({ type: "run", running });
+  }
+
+  // Called from paint(): keeps the sampler pointed at the reconstruction that is
+  // currently on screen, and re-seeds it whenever the scene changes.
+  function syncLangevin({ force = false } = {}) {
+    if (langevinPanel.hidden || !state.scene || !state.images) return;
+    const worker = langevinWorker();
+    if (!worker) return;
+    const langevin = state.langevin;
+    const now = performance.now();
+    const fresh = langevin.token !== state.loadToken;
+    if (!force && !fresh && now - langevin.lastSync < LANGEVIN_SYNC_MS) return;
+    langevin.lastSync = now;
+
+    if (fresh) {
+      langevin.token = state.loadToken;
+      langevin.mask = langevinHullMask(state.scene);
+      clearCanvas(canvases.langevin);
+      langevinIterations.textContent = "0 steps";
+      const mask = langevin.mask.slice();
+      const observation = langevinObservation();
+      worker.postMessage(
+        {
+          type: "init",
+          width: LANGEVIN_WIDTH,
+          height: LANGEVIN_HEIGHT,
+          aspect: state.scene.frameHeight / state.scene.frameWidth,
+          mask: mask.buffer,
+          observation: observation.buffer,
+          params: langevinParams(),
+        },
+        [mask.buffer, observation.buffer],
+      );
+      setLangevinRunning(true);
+      return;
+    }
+
+    const observation = langevinObservation();
+    worker.postMessage({ type: "observation", observation: observation.buffer }, [
+      observation.buffer,
+    ]);
+  }
+
+  function setLangevinVisible(show, { scroll = false } = {}) {
+    langevinPanel.hidden = !show;
+    langevinReadout.hidden = !show;
+    updatePanelColumns();
+    langevinToggle.setAttribute("aria-pressed", String(show));
+    langevinToggle.textContent = show ? "Hide Langevin sampling" : "Show Langevin sampling";
+    if (show) {
+      clearCanvas(canvases.langevin);
+      syncLangevin({ force: true });
+      setLangevinRunning(true);
+    } else {
+      setLangevinRunning(false);
+    }
+    if (show && scroll) {
+      requestAnimationFrame(() => {
+        langevinPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
+  }
+
+  // One source of truth for the panel row: three base panels plus whichever
+  // optional panels are open. Six panels wrap into two rows of three instead of
+  // squeezing every canvas below a legible width.
+  function updatePanelColumns() {
+    const optional = [densityPanel, langevinPanel, fidelityPanel].filter(
+      (panel) => !panel.hidden,
+    ).length;
+    panelGrid.dataset.columns = String(3 + optional);
+  }
+
   function drawPatch(current) {
     drawRaster(current);
     const truthCanvas = canvases.groundTruthPatch;
@@ -1061,6 +1244,7 @@
     }
 
     if (!patchDrawer.hidden) drawPatch(current);
+    if (!langevinPanel.hidden) syncLangevin();
     drawFidelity();
     timeline.value = String(state.count);
     progressFixation.textContent = `${state.count.toLocaleString()} / ${state.scene.total.toLocaleString()}`;
@@ -1240,6 +1424,143 @@
     state.replayObjectUrl = null;
   }
 
+  // Restricted scenes ---------------------------------------------------------
+  //
+  // The imagery ships as AES-256-GCM ciphertext; only the scene names are in the
+  // clear. The key is derived from a passphrase and held in memory alone, so a
+  // reload re-locks everything. Nothing is written to storage.
+
+  const RESTRICTED_ROOT = "./data/restricted";
+
+  function base64Bytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function loadRestrictedIndex() {
+    try {
+      const response = await fetch(`${RESTRICTED_ROOT}/index.json`);
+      if (!response.ok) return null;
+      const index = await response.json();
+      return index?.scenes?.length ? index : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function deriveRestrictedKey(passphrase) {
+    const { kdf } = state.restricted.index;
+    const material = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(passphrase),
+      "PBKDF2",
+      false,
+      ["deriveKey"],
+    );
+    return crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: base64Bytes(kdf.salt),
+        iterations: kdf.iterations,
+        hash: kdf.hash,
+      },
+      material,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
+    );
+  }
+
+  async function openSealed(key, path) {
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+    const sealed = new Uint8Array(await response.arrayBuffer());
+    // A wrong key fails the GCM tag here rather than yielding garbage.
+    return crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: sealed.subarray(0, 12) },
+      key,
+      sealed.subarray(12),
+    );
+  }
+
+  function sealedUrl(buffer, type, keep = false) {
+    const url = URL.createObjectURL(new Blob([buffer], { type }));
+    if (!keep) state.restricted.urls.push(url);
+    return url;
+  }
+
+  // Thumbnails live for the session; a scene's assets only until the next scene.
+  function releaseRestrictedSceneUrls() {
+    for (const url of state.restricted.urls) URL.revokeObjectURL(url);
+    state.restricted.urls = [];
+  }
+
+  const RESTRICTED_TYPES = {
+    "original.webp": "image/webp",
+    "thumb.webp": "image/webp",
+    "density.webp": "image/webp",
+    "evidence.webp": "image/webp",
+    "posterior.webp": "image/webp",
+    "patches.webp": "image/webp",
+    "truth-patches.webp": "image/webp",
+    "trial-rasters.webp": "image/webp",
+    "replay.mp4": "video/mp4",
+  };
+
+  const RESTRICTED_ASSET_KEYS = {
+    original: "original.webp",
+    density: "density.webp",
+    evidence: "evidence.webp",
+    posterior: "posterior.webp",
+    patches: "patches.webp",
+    truthPatches: "truth-patches.webp",
+    trialRasters: "trial-rasters.webp",
+    replay: "replay.mp4",
+  };
+
+  // Decrypt one scene into blob URLs so every downstream loader is unchanged.
+  async function openRestrictedScene(record) {
+    const key = state.restricted.key;
+    const base = `${RESTRICTED_ROOT}/${record.id}`;
+    const scene = JSON.parse(
+      new TextDecoder().decode(await openSealed(key, `${base}/scene.json.enc`)),
+    );
+    const names = Object.entries(RESTRICTED_ASSET_KEYS);
+    const buffers = await Promise.all(
+      names.map(([, file]) => openSealed(key, `${base}/${file}.enc`)),
+    );
+    const paths = Object.fromEntries(
+      names.map(([key_, file], index) => [key_, sealedUrl(buffers[index], RESTRICTED_TYPES[file])]),
+    );
+    return { scene, paths };
+  }
+
+  async function unlockRestricted(passphrase) {
+    const key = await deriveRestrictedKey(passphrase);
+    const first = state.restricted.index.scenes[0];
+    // Cheapest possible probe: a thumbnail either authenticates or it does not.
+    const probe = await openSealed(key, `${RESTRICTED_ROOT}/${first.id}/thumb.webp.enc`);
+    state.restricted.key = key;
+    state.restricted.thumbs = new Map([[first.id, sealedUrl(probe, "image/webp", true)]]);
+    const rest = state.restricted.index.scenes.slice(1);
+    const thumbs = await Promise.all(
+      rest.map((record) => openSealed(key, `${RESTRICTED_ROOT}/${record.id}/thumb.webp.enc`)),
+    );
+    rest.forEach((record, index) => {
+      state.restricted.thumbs.set(record.id, sealedUrl(thumbs[index], "image/webp", true));
+    });
+    buildSceneGrid(state.manifest);
+  }
+
+  function showUnlockDialog() {
+    unlockError.hidden = true;
+    unlockPassword.value = "";
+    if (typeof unlockDialog.showModal === "function") unlockDialog.showModal();
+    unlockPassword.focus();
+  }
+
   function selectCard(slug) {
     grid.querySelectorAll(".scene-card").forEach((card) => {
       const selected = card.dataset.slug === slug;
@@ -1253,20 +1574,29 @@
     setPlaying(false);
     hideSceneMagnifier();
     releaseReplay();
+    releaseRestrictedSceneUrls();
     setBusy(true);
     selectCard(record.slug);
     viewerTitle.textContent = record.title;
     try {
-      const response = await fetch(`./data/${record.data}`);
-      if (!response.ok) throw new Error(`Scene metadata returned ${response.status}`);
-      const scene = await response.json();
-      const paths = imagePaths(scene, `./data/${record.data}`);
+      let scene;
+      let paths;
+      if (record.restricted) {
+        if (!state.restricted.key) throw new Error("restricted scene is locked");
+        setBusy(true, "Decrypting scene…");
+        ({ scene, paths } = await openRestrictedScene(record));
+        if (token !== state.loadToken) return;
+      } else {
+        const response = await fetch(`./data/${record.data}`);
+        if (!response.ok) throw new Error(`Scene metadata returned ${response.status}`);
+        scene = await response.json();
+        paths = imagePaths(scene, `./data/${record.data}`);
+      }
       const names = ["original", "density", "evidence", "posterior"];
       const loaded = await Promise.all(names.map((name) => loadImage(paths[name])));
       if (token !== state.loadToken) return;
       state.scene = scene;
       prepareViewingTimeline(scene);
-      prepareFidelity(scene);
       state.images = Object.fromEntries(names.map((name, index) => [name, loaded[index]]));
       state.assetPaths = paths;
       state.patchPromise = null;
@@ -1320,8 +1650,59 @@
       button.addEventListener("click", () => selectScene(record, { focusViewer: true }));
       fragment.append(button);
     });
+    const restricted = state.restricted.index?.scenes ?? [];
+    const unlocked = Boolean(state.restricted.key);
+    restricted.forEach((record) => {
+      const button = document.createElement("button");
+      button.className = unlocked ? "scene-card" : "scene-card is-locked";
+      button.type = "button";
+      button.role = "option";
+      button.dataset.slug = record.slug;
+      button.dataset.restricted = record.id;
+      button.setAttribute("aria-selected", "false");
+
+      if (unlocked) {
+        const image = document.createElement("img");
+        image.src = state.restricted.thumbs.get(record.id);
+        image.alt = "";
+        image.width = 322;
+        image.height = 90;
+        image.decoding = "async";
+        const label = document.createElement("span");
+        label.textContent = record.title;
+        button.append(image, label);
+        button.setAttribute("aria-label", `${record.title}: original and decoded`);
+        button.addEventListener("click", () =>
+          selectScene({ ...record, restricted: true }, { focusViewer: true }),
+        );
+      } else {
+        // Locked: the name shows, the pixels do not, and the card cannot open
+        // the viewer. Clicking it offers the passphrase instead.
+        const tile = document.createElement("div");
+        tile.className = "locked-tile";
+        tile.innerHTML =
+          '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+          '<rect x="5" y="11" width="14" height="9" rx="2"></rect>' +
+          '<path d="M8.5 11V7.8a3.5 3.5 0 0 1 7 0V11"></path></svg>';
+        const label = document.createElement("span");
+        label.textContent = record.title;
+        button.append(tile, label);
+        button.setAttribute("aria-label", `${record.title}: locked, passphrase required`);
+        button.setAttribute("aria-disabled", "true");
+        button.addEventListener("click", showUnlockDialog);
+      }
+      fragment.append(button);
+    });
+
     grid.replaceChildren(fragment);
-    sceneCount.textContent = `${records.length} scenes · original | decoded`;
+    const shown = records.length + restricted.length;
+    sceneCount.textContent = `${shown} scenes · original | decoded`;
+    if (restricted.length && !unlocked) {
+      const note = document.createElement("span");
+      note.className = "unlock-note";
+      note.textContent = `${restricted.length} restricted scenes are locked — click one to enter the passphrase.`;
+      sceneCount.append(note);
+    }
   }
 
   function stopArrowHold() {
@@ -1419,6 +1800,63 @@
     setPatchDrawerVisible(patchDrawer.hidden, { scroll: true });
   });
 
+  unlockCancel.addEventListener("click", () => unlockDialog.close());
+
+  unlockForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const passphrase = unlockPassword.value;
+    if (!passphrase) return;
+    unlockError.hidden = true;
+    unlockSubmit.disabled = true;
+    unlockSubmit.textContent = "Unlocking…";
+    try {
+      await unlockRestricted(passphrase);
+      unlockDialog.close();
+    } catch (error) {
+      console.error(error);
+      unlockError.textContent = "That passphrase did not unlock the scenes.";
+      unlockError.hidden = false;
+      unlockPassword.select();
+    } finally {
+      unlockSubmit.disabled = false;
+      unlockSubmit.textContent = "Unlock";
+    }
+  });
+
+  langevinToggle.addEventListener("click", () => {
+    setLangevinVisible(langevinPanel.hidden, { scroll: true });
+  });
+
+  langevinRun.addEventListener("click", () => {
+    setLangevinRunning(!state.langevin.running);
+  });
+
+  langevinReset.addEventListener("click", () => {
+    syncLangevin({ force: true });
+    if (state.langevin.worker) state.langevin.worker.postMessage({ type: "reset" });
+  });
+
+  langevinEta.addEventListener("input", () => {
+    langevinEtaValue.textContent = Number(langevinEta.value).toFixed(3);
+    if (state.langevin.worker) {
+      state.langevin.worker.postMessage({ type: "params", params: langevinParams() });
+    }
+  });
+
+  langevinTemperature.addEventListener("input", () => {
+    langevinTemperatureValue.textContent = Number(langevinTemperature.value).toFixed(2);
+    if (state.langevin.worker) {
+      state.langevin.worker.postMessage({ type: "params", params: langevinParams() });
+    }
+  });
+
+  langevinSnr.addEventListener("input", () => {
+    langevinSnrValue.textContent = Number(langevinSnr.value).toFixed(1);
+    if (state.langevin.worker) {
+      state.langevin.worker.postMessage({ type: "params", params: langevinParams() });
+    }
+  });
+
   fidelityToggle.addEventListener("click", () => {
     setFidelityVisible(fidelityPanel.hidden, { scroll: true });
   });
@@ -1441,7 +1879,7 @@
   densityToggle.addEventListener("click", () => {
     const show = densityPanel.hidden;
     densityPanel.hidden = !show;
-    panelGrid.classList.toggle("density-visible", show);
+    updatePanelColumns();
     densityToggle.setAttribute("aria-pressed", String(show));
     densityToggle.textContent = show ? "Hide fixation density" : "Show fixation density";
     if (show) paint();
@@ -1472,10 +1910,18 @@
   window.addEventListener("pagehide", () => {
     stopArrowHold();
     releaseReplay();
+    if (state.langevin.worker) state.langevin.worker.terminate();
+    state.langevin.worker = null;
+    state.langevin.token = -1;
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) setPlaying(false);
+    if (document.hidden) {
+      setPlaying(false);
+      if (state.langevin.running) setLangevinRunning(false);
+    } else if (!langevinPanel.hidden && !state.langevin.running) {
+      setLangevinRunning(true);
+    }
   });
 
   fetch("./data/manifest.json")
@@ -1483,8 +1929,9 @@
       if (!response.ok) throw new Error(`Manifest returned ${response.status}`);
       return response.json();
     })
-    .then((manifest) => {
+    .then(async (manifest) => {
       state.manifest = manifest;
+      state.restricted.index = await loadRestrictedIndex();
       buildSceneGrid(manifest);
       const initial =
         manifest.scenes.find((scene) => scene.slug === "cornellornithography") ||

@@ -86,6 +86,26 @@
           </div>
         </div>
         <div id="scene-grid" class="scene-grid" role="listbox" aria-label="Choose a scene"></div>
+
+        <dialog id="unlock-dialog" class="unlock-dialog" aria-labelledby="unlock-title">
+          <form method="dialog" id="unlock-form">
+            <h3 id="unlock-title">Restricted scenes</h3>
+            <p>
+              These recordings are held back pending image-use approval. The imagery is
+              published encrypted; a passphrase decrypts it in your browser for this visit only.
+              Reloading the page locks them again.
+            </p>
+            <label class="unlock-field">
+              <span>Passphrase</span>
+              <input id="unlock-password" type="password" autocomplete="off" spellcheck="false" />
+            </label>
+            <p id="unlock-error" class="unlock-error" role="alert" hidden></p>
+            <div class="unlock-actions">
+              <button type="button" id="unlock-cancel" class="quiet-button">Cancel</button>
+              <button type="submit" id="unlock-submit" class="quiet-button">Unlock</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <section id="viewer" class="viewer" aria-labelledby="viewer-title" aria-busy="true" tabindex="0">
@@ -100,6 +120,9 @@
             </button>
             <button id="patch-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="patch-drawer">
               Show patch decoder
+            </button>
+            <button id="langevin-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="langevin-panel">
+              Show Langevin sampling
             </button>
             <button id="fidelity-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="fidelity-panel">
               Show fidelity curve
@@ -179,6 +202,22 @@
             <canvas id="posterior-canvas" width="1280" height="720"></canvas>
           </figure>
 
+          <figure id="langevin-panel" class="visual-panel langevin-panel" hidden>
+            <figcaption>
+              <span>Langevin sample</span>
+              <span class="panel-legend langevin-legend">
+                <span><i class="legend-line legend-hull"></i>Hull</span>
+                <span id="langevin-iterations">0 steps</span>
+              </span>
+            </figcaption>
+            <canvas
+              id="langevin-canvas"
+              width="1280"
+              height="720"
+              aria-label="Langevin posterior sample of the 1/f reconstruction inside the robust hull."
+            ></canvas>
+          </figure>
+
           <figure id="fidelity-panel" class="visual-panel fidelity-panel" hidden>
             <figcaption>
               <span>Reconstruction fidelity</span>
@@ -204,10 +243,28 @@
           </figure>
         </div>
 
-        <div id="fidelity-readout" class="fidelity-readout" hidden>
-          <p id="fidelity-summary" class="fidelity-summary" aria-live="polite"></p>
-          <p id="fidelity-note" class="fidelity-note"></p>
+        <div id="langevin-readout" class="langevin-readout" hidden>
+          <div class="langevin-controls">
+            <button id="langevin-run" class="quiet-button" type="button" aria-pressed="true">Pause sampling</button>
+            <button id="langevin-reset" class="quiet-button" type="button">Reset to reconstruction</button>
+            <label class="langevin-slider" title="Step size: how far each update moves down the posterior energy.">
+              <span>&#951; <b id="langevin-eta-value">0.100</b></span>
+              <input id="langevin-eta" type="range" min="0.001" max="1" step="0.001" value="0.1" />
+            </label>
+            <label class="langevin-slider" title="Temperature: 0 is gradient descent to the MAP, higher values inject more noise and sample more widely.">
+              <span>T <b id="langevin-temperature-value">1.00</b></span>
+              <input id="langevin-temperature" type="range" min="0" max="5" step="0.01" value="1" />
+            </label>
+            <label class="langevin-slider" title="Assumed reliability of the reconstruction: sigma_n^2 = var / SNR. Low SNR trusts the 1/f prior more.">
+              <span>SNR <b id="langevin-snr-value">8.0</b></span>
+              <input id="langevin-snr" type="range" min="0.05" max="24" step="0.05" value="8" />
+            </label>
+            <span class="langevin-meter">
+              <small>Deviation</small><b id="langevin-deviation">—</b>
+            </span>
+          </div>
         </div>
+
 
         <aside id="patch-drawer" class="decoder-drawer" hidden>
           <div class="decoder-heading">

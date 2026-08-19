@@ -232,32 +232,42 @@
   color: var(--border);
 }
 
-.panel-grid {
+/* The three core panels always share a row; each optional panel adds a column.
+   `data-columns` is set in app.js so one rule covers every combination. At six
+   panels the row wraps into two rows of three rather than shrinking every
+   canvas past the point of being readable. */
+.panel-grid,
+.panel-grid[data-columns="3"] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.panel-grid.density-visible,
-.panel-grid.fidelity-visible {
+.panel-grid[data-columns="4"] {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.panel-grid.density-visible.fidelity-visible {
+.panel-grid[data-columns="5"] {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.panel-grid[data-columns="6"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 @media (min-width: 901px) {
-  .panel-grid.density-visible .visual-panel figcaption,
-  .panel-grid.fidelity-visible .visual-panel figcaption {
+  .panel-grid[data-columns="4"] .visual-panel figcaption,
+  .panel-grid[data-columns="5"] .visual-panel figcaption,
+  .panel-grid[data-columns="6"] .visual-panel figcaption {
     align-items: flex-start;
     flex-direction: column;
     justify-content: flex-start;
     min-height: 92px;
   }
 
-  .panel-grid.density-visible .panel-legend,
-  .panel-grid.fidelity-visible .panel-legend {
+  .panel-grid[data-columns="4"] .panel-legend,
+  .panel-grid[data-columns="5"] .panel-legend,
+  .panel-grid[data-columns="6"] .panel-legend {
     flex-wrap: wrap;
     gap: 4px 7px;
   }
@@ -870,9 +880,7 @@
   }
 
   .panel-grid,
-  .panel-grid.density-visible,
-  .panel-grid.fidelity-visible,
-  .panel-grid.density-visible.fidelity-visible {
+  .panel-grid[data-columns] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -882,13 +890,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .panel-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .panel-grid.density-visible,
-  .panel-grid.fidelity-visible,
-  .panel-grid.density-visible.fidelity-visible {
+  .panel-grid,
+  .panel-grid[data-columns] {
     grid-template-columns: 1fr;
   }
 
@@ -1044,33 +1047,89 @@
   cursor: pointer;
 }
 
-.fidelity-readout {
+/* Langevin sampling ------------------------------------------------------- */
+
+/* A column peer of the image panels: the sample is drawn on the same
+   1280x720 canvas, so `.visual-panel canvas` handles all the scaling. */
+#langevin-canvas {
+  background: #090e16;
+}
+
+.langevin-legend {
+  font-variant-numeric: tabular-nums;
+}
+
+.langevin-readout {
   margin-top: 8px;
 }
 
-.fidelity-readout[hidden] {
+.langevin-readout[hidden] {
   display: none;
 }
 
-.fidelity-summary {
-  margin: 0;
-  color: var(--muted);
+.langevin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.langevin-controls .quiet-button {
+  min-height: 30px;
+  padding: 5px 9px;
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.5;
 }
 
-.fidelity-summary em {
-  color: var(--text);
-  font-style: normal;
-  font-weight: 620;
-}
-
-.fidelity-note {
-  margin: 2px 0 0;
+.langevin-slider {
+  display: flex;
+  flex: 1 1 150px;
+  min-width: 128px;
+  max-width: 240px;
+  align-items: center;
+  gap: 8px;
   color: var(--faint);
   font-size: 11px;
-  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.langevin-slider input {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--link);
+}
+
+.langevin-slider b,
+.langevin-meter b {
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.langevin-meter {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.langevin-meter small {
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .langevin-slider {
+    max-width: none;
+  }
+
+  .langevin-meter {
+    margin-left: 0;
+  }
 }
 
 /* Scene loading progress -------------------------------------------------- */
@@ -1106,4 +1165,128 @@
   .load-progress-bar {
     transition: none;
   }
+}
+
+/* Restricted scenes -------------------------------------------------------- */
+
+.scene-card.is-locked {
+  cursor: not-allowed;
+}
+
+.scene-card.is-locked img {
+  filter: grayscale(1) contrast(0.35) brightness(0.55);
+}
+
+.locked-tile {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 322 / 90;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    135deg,
+    #12161f,
+    #12161f 6px,
+    #0b0f17 6px,
+    #0b0f17 12px
+  );
+}
+
+.locked-tile svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.66);
+  stroke-width: 1.8;
+}
+
+.scene-card.is-locked span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scene-card.is-locked span::after {
+  content: "Locked";
+  padding: 0 4px;
+  color: var(--faint);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.unlock-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.unlock-dialog {
+  max-width: 420px;
+  padding: 0;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.unlock-dialog::backdrop {
+  background: rgba(9, 14, 22, 0.55);
+}
+
+.unlock-dialog form {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.unlock-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.unlock-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.unlock-field {
+  display: grid;
+  gap: 4px;
+}
+
+.unlock-field span {
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.unlock-field input {
+  min-height: 36px;
+  padding: 7px 10px;
+  color: var(--text);
+  font: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.unlock-error {
+  color: #d03b3b;
+  font-size: 12px;
+}
+
+.unlock-error[hidden] {
+  display: none;
+}
+
+.unlock-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
 }
