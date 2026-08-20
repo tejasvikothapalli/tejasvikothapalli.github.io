@@ -2170,7 +2170,9 @@
       manifest.scenes.find((scene) => scene.slug === previousSlug) ||
       manifest.scenes.find((scene) => scene.slug === "cornellornithography") ||
       manifest.scenes[0];
-    return selectScene(record, { focusViewer: !initial });
+    // No scroll on an animal switch: the point is to compare the two animals'
+    // reconstructions in the thumbnail grid without the page moving.
+    return selectScene(record);
   }
 
   Promise.all(ANIMALS.map((animal) => loadAnimalManifest(animal.id).catch(() => null)))
