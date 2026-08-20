@@ -1741,7 +1741,22 @@
       viewerTitle.textContent = record.title;
 
       paint();
-      if (paths.replay) await loadReplay(paths.replay, scene.total, token);
+      if (paths.replay) {
+        // A replay that will not decode must not take the scene down with it: the
+        // checkpoint sprites render the same reconstruction, just coarser.
+        try {
+          await loadReplay(paths.replay, scene.total, token);
+        } catch (error) {
+          console.error(error);
+          releaseReplay();
+          state.videoReady = false;
+          state.videoSeeking = false;
+          replayPending.hidden = false;
+          replayPending.textContent =
+            `Per-fixation replay for this scene is being re-rendered (expected by ${REBUILD_ETA}); ` +
+            `the scrubber steps through ${scene.frameCounts?.length ?? 28} checkpoints of the current reconstruction meanwhile.`;
+        }
+      }
       if (token !== state.loadToken) return;
       setBusy(false);
       paint();
