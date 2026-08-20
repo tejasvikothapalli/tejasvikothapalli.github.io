@@ -66,14 +66,27 @@
           from V1 activity while a marmoset freely views it. We record neural activity from
           marmoset foveal V1. Due to retinotopy and the recording location, all recorded cells
           respond to a ~0.5° × 0.5° region of visual space near the center of gaze. At every
-          fixation, a decoder predicts this gaze-contingent patch from the population’s neural
+          fixation, ridge regression predicts this gaze-contingent patch from the population’s neural
           activity. Eye position places each decoded patch in scene coordinates; patches
           accumulated across fixations and sessions are then combined with a 1/f prior to
           reconstruct the full scene. The interactive visualization below shows both patch-level
-          decoding fidelity and the resulting full-scene reconstruction. Every reconstruction is
+          decoding fidelity and the resulting full-scene reconstruction, for each of the two
+          animals. Every reconstruction is
           fully held out: the decoder was never trained on the scene it reconstructs.
         </p>
       </aside>
+
+      <section class="animal-picker" aria-labelledby="animal-heading">
+        <div class="section-heading">
+          <div>
+            <h2 id="animal-heading">Animal</h2>
+            <p>
+              <span id="animal-note">Each animal has its own sessions, decoder and reconstructions.</span>
+            </p>
+          </div>
+        </div>
+        <div id="animal-grid" class="animal-grid" role="radiogroup" aria-label="Choose an animal"></div>
+      </section>
 
       <section class="scene-picker" aria-labelledby="scene-heading">
         <div class="section-heading">
@@ -156,7 +169,7 @@
               <span>Static natural scene</span>
               <span class="panel-legend">
                 <span><i class="legend-line legend-hull"></i>Hull</span>
-                <span><i class="legend-square"></i>0.56° Receptive field window</span>
+                <span><i class="legend-square"></i><span class="patch-degrees">0.35°</span> Decoded patch</span>
                 <span><i class="legend-dot"></i>Eye position</span>
               </span>
             </figcaption>
@@ -171,9 +184,9 @@
               <div id="scene-magnifier" class="scene-magnifier" hidden aria-hidden="true">
                 <canvas id="scene-magnifier-canvas" width="112" height="112"></canvas>
               </div>
-              <div class="screen-scale" aria-label="Screen size 34.1 by 19.2 degrees">
-                <span class="screen-scale-x"><i></i><b>34.1°</b></span>
-                <span class="screen-scale-y"><i></i><b>19.2°</b></span>
+              <div class="screen-scale" id="screen-scale" aria-label="Screen size in degrees of visual angle">
+                <span class="screen-scale-x"><i></i><b class="screen-degrees-x">34.1°</b></span>
+                <span class="screen-scale-y"><i></i><b class="screen-degrees-y">19.2°</b></span>
               </div>
             </div>
           </figure>
@@ -198,6 +211,12 @@
           <figure class="visual-panel">
             <figcaption>
               <span>1/f reconstruction</span>
+              <span
+                class="panel-legend"
+                title="Per-band display gain, fit leave-one-photo-out: this photograph's gains come from the other 26, so no photo contributes to its own display. The MAP estimate is shrunk toward the mean by construction, so each band is rescaled toward the corpus band contrast, damped by that band's correlation. Display only, and not part of decoding, calibration, the prior, the hull or the solve."
+              >
+                <span id="restoration-note">Contrast restored</span>
+              </span>
             </figcaption>
             <canvas id="posterior-canvas" width="1280" height="720"></canvas>
           </figure>
@@ -234,12 +253,15 @@
                 <span><i class="legend-line legend-evidence"></i>Decoded patches</span>
               </span>
             </figcaption>
-            <canvas
-              id="fidelity-canvas"
-              width="1280"
-              height="720"
-              aria-label="Reconstruction fidelity against fixation count and viewing time. Click to jump the timeline."
-            ></canvas>
+            <div class="canvas-stage">
+              <canvas
+                id="fidelity-canvas"
+                width="1280"
+                height="720"
+                aria-label="Reconstruction fidelity against fixation count and viewing time. Click to jump the timeline."
+              ></canvas>
+              <p id="fidelity-pending" class="panel-pending" hidden></p>
+            </div>
           </figure>
         </div>
 
@@ -267,6 +289,7 @@
 
 
         <aside id="patch-drawer" class="decoder-drawer" hidden>
+          <p id="patch-pending" class="panel-pending drawer-pending" hidden></p>
           <div class="decoder-heading">
             <div>
               <p>From spikes to patch</p>
@@ -285,9 +308,9 @@
               </div>
             </figure>
             <span class="flow-arrow" aria-hidden="true">→</span>
-            <div class="network-box" aria-label="Decoder network: input 100 milliseconds of neural activity; output gaze-contingent patch">
-              <strong>Decoder network</strong>
-              <span><small>Input</small>100 ms neural activity</span>
+            <div class="network-box" aria-label="Ridge regression: input 75 milliseconds of neural activity; output gaze-contingent patch">
+              <strong>Ridge regression</strong>
+              <span><small>Input</small><span id="decoder-input">75 ms neural activity</span></span>
               <span><small>Output</small>Gaze-contingent patch</span>
             </div>
             <span class="flow-arrow" aria-hidden="true">→</span>
@@ -301,12 +324,14 @@
               <figcaption>Ground truth</figcaption>
               <div class="patch-scale-wrap">
                 <canvas id="ground-truth-patch-canvas" width="210" height="210"></canvas>
-                <span class="patch-scale-x"><i></i><b>0.56°</b></span>
-                <span class="patch-scale-y"><i></i><b>0.56°</b></span>
+                <span class="patch-scale-x"><i></i><b class="patch-degrees">0.35°</b></span>
+                <span class="patch-scale-y"><i></i><b class="patch-degrees">0.35°</b></span>
               </div>
             </figure>
           </div>
         </aside>
+
+        <p id="replay-pending" class="transport-pending" hidden></p>
 
         <div class="transport" aria-label="Playback controls">
           <button id="play" type="button" aria-pressed="false">Play</button>

@@ -45,6 +45,63 @@
   line-height: 1.55;
 }
 
+/* Animal picker ----------------------------------------------------------- */
+
+.animal-picker {
+  margin-top: var(--s5);
+}
+
+.animal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.animal-card {
+  display: grid;
+  gap: 2px;
+  min-width: 168px;
+  padding: 9px 14px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.animal-card:hover {
+  border-color: color-mix(in srgb, var(--link) 45%, var(--border));
+}
+
+.animal-card.is-selected {
+  color: var(--link);
+  border-color: color-mix(in srgb, var(--link) 65%, var(--border));
+  background: color-mix(in srgb, var(--link) 7%, var(--panel));
+}
+
+.animal-card:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.animal-name {
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.animal-stats {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.animal-card.is-selected .animal-stats {
+  color: color-mix(in srgb, var(--link) 70%, var(--muted));
+}
+
 .scene-picker {
   margin-top: var(--s5);
 }
@@ -791,6 +848,11 @@
   text-align: right;
 }
 
+/* [hidden] loses to the explicit display below, so restate it. */
+.transport output span[hidden] {
+  display: none;
+}
+
 .transport output span {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1130,6 +1192,58 @@
   .langevin-meter {
     margin-left: 0;
   }
+}
+
+/* Rebuild-in-progress panels ---------------------------------------------- */
+
+/* Same treatment as the scene loading screen: the panel stays visible but is
+   plainly marked as not yet rebuilt, so nothing stale is mistaken for current. */
+.panel-pending {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+  background: color-mix(in srgb, #090e16 82%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.panel-pending[hidden] {
+  display: none;
+}
+
+.panel-pending b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-weight: 620;
+}
+
+.drawer-pending {
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--muted);
+}
+
+.decoder-drawer {
+  position: relative;
+}
+
+.transport-pending {
+  margin: 6px 0 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.transport-pending[hidden] {
+  display: none;
 }
 
 /* Scene loading progress -------------------------------------------------- */

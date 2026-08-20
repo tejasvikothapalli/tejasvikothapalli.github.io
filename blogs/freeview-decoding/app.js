@@ -2,6 +2,7 @@
   "use strict";
 
   const grid = document.querySelector("#scene-grid");
+  const animalGrid = document.querySelector("#animal-grid");
   const sceneCount = document.querySelector("#scene-count");
   const viewer = document.querySelector("#viewer");
   const viewerTitle = document.querySelector("#viewer-title");
@@ -31,6 +32,9 @@
   const fidelityToggle = document.querySelector("#fidelity-toggle");
   const fidelityPanel = document.querySelector("#fidelity-panel");
   const fidelityMetric = document.querySelector("#fidelity-metric");
+  const fidelityPending = document.querySelector("#fidelity-pending");
+  const patchPending = document.querySelector("#patch-pending");
+  const replayPending = document.querySelector("#replay-pending");
   const langevinToggle = document.querySelector("#langevin-toggle");
   const langevinPanel = document.querySelector("#langevin-panel");
   const langevinReadout = document.querySelector("#langevin-readout");
@@ -63,7 +67,15 @@
     langevin: document.querySelector("#langevin-canvas"),
   };
 
+  // One animal per data root: data/<animal>/manifest.json + scenes + restricted.
+  const ANIMALS = [
+    { id: "allen", label: "Allen" },
+    { id: "logan", label: "Logan" },
+  ];
+
   const state = {
+    animal: ANIMALS[0].id,
+    animalManifests: new Map(),
     manifest: null,
     scene: null,
     images: null,
@@ -98,7 +110,7 @@
       canvas: null,
       source: null,
     },
-    restricted: { index: null, key: null, thumbs: new Map(), urls: [] },
+    restricted: { index: null, key: null, thumbs: new Map(), urls: [], passphrase: null },
   };
 
   speed.value = String(state.speed);
@@ -158,6 +170,94 @@
       image.onerror = () => reject(new Error(`Could not load ${path}`));
       image.src = path;
     });
+  }
+
+  // Patch size and screen extent differ per animal and per decoder arm, so the
+  // degree labels come from the scene metadata rather than the markup.
+  function applySceneGeometry(scene) {
+    const patch = Number(scene.patchDegrees);
+    if (Number.isFinite(patch)) {
+      document.querySelectorAll(".patch-degrees").forEach((node) => {
+        node.textContent = `${patch.toFixed(2)}°`;
+      });
+    }
+    const degrees = scene.screenDegrees;
+    if (Array.isArray(degrees) && degrees.length === 2) {
+      const [width, height] = degrees.map(Number);
+      const x = document.querySelector(".screen-degrees-x");
+      const y = document.querySelector(".screen-degrees-y");
+      if (x) x.textContent = `${width.toFixed(1)}°`;
+      if (y) y.textContent = `${height.toFixed(1)}°`;
+      const stage = document.querySelector("#screen-scale");
+      if (stage) {
+        stage.setAttribute(
+          "aria-label",
+          `Screen size ${width.toFixed(1)} by ${height.toFixed(1)} degrees`,
+        );
+      }
+    }
+    const note = document.querySelector("#restoration-note");
+    if (note) {
+      const gains = scene.contrastRestoration;
+      note.textContent = gains
+        ? `Contrast restored ×${Number(gains.lowGain).toFixed(1)}/${Number(gains.highGain).toFixed(1)}`
+        : "Contrast restored";
+      note.hidden = !gains;
+    }
+    const input = document.querySelector("#decoder-input");
+    if (input && Number.isFinite(Number(scene.windowMilliseconds))) {
+      input.textContent = `${Math.round(Number(scene.windowMilliseconds))} ms neural activity`;
+    }
+  }
+
+  // The decoder was rebuilt on 2026-08-19; the derived panels are re-rendering
+  // behind it. Anything not yet rebuilt is covered rather than shown stale.
+  const REBUILD_ETA = "midnight tonight";
+
+  function pendingMessage(what) {
+    return [
+      Object.assign(document.createElement("b"), {
+        textContent: `${what} is rebuilding`,
+      }),
+      document.createTextNode(
+        `New leave-one-photo-out decoder · expected by ${REBUILD_ETA}. ` +
+          `The scene, density, decoded patches and 1/f reconstruction above are already current.`,
+      ),
+    ];
+  }
+
+  function applyRebuildState(scene) {
+    // Viewing time, presentation index and per-session cell counts all come from
+    // the trial rasters. Hide them rather than show em dashes and 0:00.
+    const timed = Boolean(scene.recordingSeconds);
+    progressTime.parentElement.hidden = !timed;
+    trialLabel.hidden = !Array.isArray(scene.rasterTrial);
+    sessionCells.hidden = !Array.isArray(scene.sessionCells);
+
+    const hasFidelity = Boolean(scene.fidelity?.counts?.length);
+    fidelityPending.hidden = hasFidelity;
+    if (!hasFidelity) fidelityPending.replaceChildren(...pendingMessage("Fidelity curve"));
+    fidelityToggle.disabled = false;
+
+    const hasPatchDecoder = Boolean(scene.assets?.truthPatches && scene.assets?.trialRasters);
+    patchPending.hidden = hasPatchDecoder;
+    if (!hasPatchDecoder) patchPending.replaceChildren(...pendingMessage("Patch decoder"));
+
+    const hasReplay = Boolean(scene.assets?.replay);
+    replayPending.hidden = hasReplay;
+    if (!hasReplay) {
+      replayPending.textContent =
+        `Per-fixation replay is still rendering for this scene (expected by ${REBUILD_ETA}); ` +
+        `the scrubber steps through ${scene.frameCounts?.length ?? 28} checkpoints of the current reconstruction meanwhile.`;
+    }
+  }
+
+  function animalLabel(animal = state.animal) {
+    return ANIMALS.find((entry) => entry.id === animal)?.label ?? animal;
+  }
+
+  function dataRoot(animal = state.animal) {
+    return `./data/${animal}`;
   }
 
   function imagePaths(scene, dataPath) {
@@ -532,6 +632,19 @@
   }
 
   function prepareViewingTimeline(scene) {
+    // Trial rasters are a later build stage. Without them there is no wall-clock
+    // mapping, so fall back to fixation-proportional time rather than failing to
+    // open the scene at all.
+    if (!Array.isArray(scene.rasterTrials) || !scene.rasterTrials.length) {
+      const seconds = new Float64Array(scene.total + 1);
+      const span = Number(scene.recordingSeconds) || 0;
+      for (let count = 0; count <= scene.total; count += 1) {
+        seconds[count] = scene.total ? (span * count) / scene.total : 0;
+      }
+      scene.viewingSeconds = seconds;
+      scene.recordingSeconds = span;
+      return;
+    }
     const totalBins = scene.rasterTrials.reduce((sum, trial) => sum + trial.bins, 0);
     const secondsPerBin = scene.recordingSeconds / totalBins;
     let elapsedBins = 0;
@@ -1234,9 +1347,13 @@
       drawPatchWindow(evidenceContext, current);
       const sessionIndex = state.scene.session[current];
       dateLabel.textContent = state.scene.dates[sessionIndex];
-      const presentation = state.scene.rasterTrial[current] + 1;
-      trialLabel.textContent = `Presentation ${presentation.toLocaleString()}`;
-      sessionCells.textContent = `${state.scene.sessionCells[sessionIndex].toLocaleString()} cells`;
+      // rasterTrial and sessionCells arrive with the trial rasters.
+      const presentation = state.scene.rasterTrial?.[current];
+      trialLabel.textContent =
+        presentation == null ? "Presentation —" : `Presentation ${(presentation + 1).toLocaleString()}`;
+      const sessionCellCount = state.scene.sessionCells?.[sessionIndex];
+      sessionCells.textContent =
+        sessionCellCount == null ? "— cells" : `${sessionCellCount.toLocaleString()} cells`;
     } else {
       dateLabel.textContent = "—";
       trialLabel.textContent = "Presentation —";
@@ -1430,7 +1547,9 @@
   // clear. The key is derived from a passphrase and held in memory alone, so a
   // reload re-locks everything. Nothing is written to storage.
 
-  const RESTRICTED_ROOT = "./data/restricted";
+  function restrictedRoot() {
+    return `${dataRoot()}/restricted`;
+  }
 
   function base64Bytes(value) {
     const binary = atob(value);
@@ -1441,7 +1560,7 @@
 
   async function loadRestrictedIndex() {
     try {
-      const response = await fetch(`${RESTRICTED_ROOT}/index.json`);
+      const response = await fetch(`${restrictedRoot()}/index.json`);
       if (!response.ok) return null;
       const index = await response.json();
       return index?.scenes?.length ? index : null;
@@ -1523,7 +1642,7 @@
   // Decrypt one scene into blob URLs so every downstream loader is unchanged.
   async function openRestrictedScene(record) {
     const key = state.restricted.key;
-    const base = `${RESTRICTED_ROOT}/${record.id}`;
+    const base = `${restrictedRoot()}/${record.id}`;
     const scene = JSON.parse(
       new TextDecoder().decode(await openSealed(key, `${base}/scene.json.enc`)),
     );
@@ -1539,14 +1658,15 @@
 
   async function unlockRestricted(passphrase) {
     const key = await deriveRestrictedKey(passphrase);
+    state.restricted.passphrase = passphrase;
     const first = state.restricted.index.scenes[0];
     // Cheapest possible probe: a thumbnail either authenticates or it does not.
-    const probe = await openSealed(key, `${RESTRICTED_ROOT}/${first.id}/thumb.webp.enc`);
+    const probe = await openSealed(key, `${restrictedRoot()}/${first.id}/thumb.webp.enc`);
     state.restricted.key = key;
     state.restricted.thumbs = new Map([[first.id, sealedUrl(probe, "image/webp", true)]]);
     const rest = state.restricted.index.scenes.slice(1);
     const thumbs = await Promise.all(
-      rest.map((record) => openSealed(key, `${RESTRICTED_ROOT}/${record.id}/thumb.webp.enc`)),
+      rest.map((record) => openSealed(key, `${restrictedRoot()}/${record.id}/thumb.webp.enc`)),
     );
     rest.forEach((record, index) => {
       state.restricted.thumbs.set(record.id, sealedUrl(thumbs[index], "image/webp", true));
@@ -1554,8 +1674,14 @@
     buildSceneGrid(state.manifest);
   }
 
-  function showUnlockDialog() {
-    unlockError.hidden = true;
+  function showUnlockDialog(pending = false) {
+    unlockError.hidden = !pending;
+    if (pending) {
+      unlockError.textContent =
+        `These scenes are being re-encrypted for the new decoder — expected by ${REBUILD_ETA}.`;
+    }
+    unlockPassword.disabled = pending;
+    unlockSubmit.disabled = pending;
     unlockPassword.value = "";
     if (typeof unlockDialog.showModal === "function") unlockDialog.showModal();
     unlockPassword.focus();
@@ -1587,10 +1713,10 @@
         ({ scene, paths } = await openRestrictedScene(record));
         if (token !== state.loadToken) return;
       } else {
-        const response = await fetch(`./data/${record.data}`);
+        const response = await fetch(`${dataRoot()}/${record.data}`);
         if (!response.ok) throw new Error(`Scene metadata returned ${response.status}`);
         scene = await response.json();
-        paths = imagePaths(scene, `./data/${record.data}`);
+        paths = imagePaths(scene, `${dataRoot()}/${record.data}`);
       }
       const names = ["original", "density", "evidence", "posterior"];
       const loaded = await Promise.all(names.map((name) => loadImage(paths[name])));
@@ -1600,13 +1726,20 @@
       state.images = Object.fromEntries(names.map((name, index) => [name, loaded[index]]));
       state.assetPaths = paths;
       state.patchPromise = null;
+      applySceneGeometry(scene);
+      applyRebuildState(scene);
       const minutes = scene.recordingSeconds / 60;
-      sceneData.textContent = `${scene.dates.length.toLocaleString()} sessions · ${minutes.toFixed(1)} min free viewing · ${scene.totalCells.toLocaleString()} cells · ${scene.total.toLocaleString()} fixations`;
+      const cells = Number(scene.totalCells);
+      sceneData.textContent =
+        `${animalLabel()} · ${scene.dates.length.toLocaleString()} sessions` +
+        (minutes ? ` · ${minutes.toFixed(1)} min free viewing` : "") +
+        (cells ? ` · ${cells.toLocaleString()} cells` : "") +
+        ` · ${scene.total.toLocaleString()} fixations`;
       timeline.max = String(scene.total);
       state.count = scene.total;
       state.fractionalCount = scene.total;
       viewerTitle.textContent = record.title;
-      fidelityToggle.disabled = !fidelityAvailable();
+
       paint();
       if (paths.replay) await loadReplay(paths.replay, scene.total, token);
       if (token !== state.loadToken) return;
@@ -1637,7 +1770,7 @@
       button.setAttribute("aria-label", `${record.title}: original and decoded`);
 
       const image = document.createElement("img");
-      image.src = `./data/${record.thumb}`;
+      image.src = `${dataRoot()}/${record.thumb}`;
       image.alt = "";
       image.width = 322;
       image.height = 90;
@@ -1650,7 +1783,16 @@
       button.addEventListener("click", () => selectScene(record, { focusViewer: true }));
       fragment.append(button);
     });
-    const restricted = state.restricted.index?.scenes ?? [];
+    // The colony scenes are in the manifest but filtered from the public grid.
+    // Until their encrypted set is rebuilt, still show them as locked cards so the
+    // picker is complete; clicking one explains rather than offering a passphrase
+    // that cannot work yet.
+    const sealed = state.restricted.index?.scenes ?? [];
+    const restricted = sealed.length
+      ? sealed
+      : manifest.scenes
+          .filter((record) => record.slug.startsWith("colony-"))
+          .map((record) => ({ ...record, id: null, pending: true }));
     const unlocked = Boolean(state.restricted.key);
     restricted.forEach((record) => {
       const button = document.createElement("button");
@@ -1687,9 +1829,14 @@
         const label = document.createElement("span");
         label.textContent = record.title;
         button.append(tile, label);
-        button.setAttribute("aria-label", `${record.title}: locked, passphrase required`);
+        button.setAttribute(
+          "aria-label",
+          record.pending
+            ? `${record.title}: locked, encrypted set rebuilding`
+            : `${record.title}: locked, passphrase required`,
+        );
         button.setAttribute("aria-disabled", "true");
-        button.addEventListener("click", showUnlockDialog);
+        button.addEventListener("click", () => showUnlockDialog(Boolean(record.pending)));
       }
       fragment.append(button);
     });
@@ -1700,7 +1847,9 @@
     if (restricted.length && !unlocked) {
       const note = document.createElement("span");
       note.className = "unlock-note";
-      note.textContent = `${restricted.length} restricted scenes are locked — click one to enter the passphrase.`;
+      note.textContent = sealed.length
+        ? `${restricted.length} restricted scenes are locked — click one to enter the passphrase.`
+        : `${restricted.length} restricted scenes are locked while their encrypted set is rebuilt.`;
       sceneCount.append(note);
     }
   }
@@ -1924,19 +2073,95 @@
     }
   });
 
-  fetch("./data/manifest.json")
-    .then((response) => {
-      if (!response.ok) throw new Error(`Manifest returned ${response.status}`);
-      return response.json();
-    })
-    .then(async (manifest) => {
-      state.manifest = manifest;
-      state.restricted.index = await loadRestrictedIndex();
-      buildSceneGrid(manifest);
-      const initial =
-        manifest.scenes.find((scene) => scene.slug === "cornellornithography") ||
-        manifest.scenes[0];
-      return selectScene(initial);
+  async function loadAnimalManifest(animal) {
+    if (state.animalManifests.has(animal)) return state.animalManifests.get(animal);
+    const response = await fetch(`${dataRoot(animal)}/manifest.json`);
+    if (!response.ok) throw new Error(`Manifest returned ${response.status}`);
+    const manifest = await response.json();
+    state.animalManifests.set(animal, manifest);
+    return manifest;
+  }
+
+  function animalSummary(manifest) {
+    if (!manifest) return "";
+    const parts = [];
+    if (manifest.sessions) parts.push(`${manifest.sessions} sessions`);
+    if (manifest.cells) parts.push(`${manifest.cells.toLocaleString()} cells`);
+    parts.push(`${manifest.sceneCount ?? manifest.scenes.length} scenes`);
+    return parts.join(" · ");
+  }
+
+  function buildAnimalPicker() {
+    const fragment = document.createDocumentFragment();
+    ANIMALS.forEach((animal) => {
+      const button = document.createElement("button");
+      button.className = "animal-card";
+      button.type = "button";
+      button.role = "radio";
+      button.dataset.animal = animal.id;
+      const name = document.createElement("span");
+      name.className = "animal-name";
+      name.textContent = animal.label;
+      const stats = document.createElement("span");
+      stats.className = "animal-stats";
+      stats.textContent = animalSummary(state.animalManifests.get(animal.id)) || "—";
+      button.append(name, stats);
+      button.addEventListener("click", () => selectAnimal(animal.id));
+      fragment.append(button);
+    });
+    animalGrid.replaceChildren(fragment);
+    markAnimal();
+  }
+
+  function markAnimal() {
+    animalGrid.querySelectorAll(".animal-card").forEach((card) => {
+      const selected = card.dataset.animal === state.animal;
+      card.classList.toggle("is-selected", selected);
+      card.setAttribute("aria-checked", String(selected));
+      const stats = card.querySelector(".animal-stats");
+      const summary = animalSummary(state.animalManifests.get(card.dataset.animal));
+      if (summary) stats.textContent = summary;
+    });
+  }
+
+  // Switching animal keeps the scene you were looking at when that animal has it,
+  // and resets everything that is keyed to the old data root.
+  async function selectAnimal(animal, { initial = false } = {}) {
+    if (!initial && animal === state.animal) return;
+    const previousSlug = state.scene?.slug;
+    setPlaying(false);
+    releaseReplay();
+    releaseRestrictedSceneUrls();
+    for (const url of state.restricted.thumbs.values()) URL.revokeObjectURL(url);
+    const passphrase = state.restricted.passphrase ?? null;
+    state.animal = animal;
+    state.restricted = { index: null, key: null, thumbs: new Map(), urls: [], passphrase };
+    state.langevin.token = -1;
+    setBusy(true, "Loading animal…");
+    const manifest = await loadAnimalManifest(animal);
+    state.manifest = manifest;
+    state.restricted.index = await loadRestrictedIndex();
+    // Same passphrase, different salt per animal: re-derive so an unlock carries over.
+    if (passphrase && state.restricted.index) {
+      try {
+        await unlockRestricted(passphrase);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    markAnimal();
+    buildSceneGrid(manifest);
+    const record =
+      manifest.scenes.find((scene) => scene.slug === previousSlug) ||
+      manifest.scenes.find((scene) => scene.slug === "cornellornithography") ||
+      manifest.scenes[0];
+    return selectScene(record, { focusViewer: !initial });
+  }
+
+  Promise.all(ANIMALS.map((animal) => loadAnimalManifest(animal.id).catch(() => null)))
+    .then(() => {
+      buildAnimalPicker();
+      return selectAnimal(state.animal, { initial: true });
     })
     .catch((error) => {
       console.error(error);
