@@ -1404,3 +1404,133 @@
   justify-content: flex-end;
   gap: 7px;
 }
+
+/* ---- progression contact sheets ------------------------------------------------------- */
+
+.progression[hidden] {
+  display: none;
+}
+
+.sheet-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+}
+
+.sheet-animals,
+.sheet-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sheet-zoom {
+  margin-left: auto;
+}
+
+.sheet-animals button,
+.sheet-zoom button,
+.sheet-download {
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.sheet-animals button[aria-pressed="true"] {
+  border-color: var(--link);
+  color: var(--link);
+}
+
+.sheet-zoom output {
+  min-width: 4.5ch;
+  text-align: center;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-download {
+  text-decoration: none;
+  display: inline-block;
+}
+
+.sheet-download[hidden] {
+  display: none;
+}
+
+.sheet-locked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.sheet-locked form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sheet-locked[hidden] {
+  display: none;
+}
+
+.sheet-stage {
+  position: relative;
+  overflow: hidden;
+  height: min(78vh, 760px);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--panel);
+  cursor: grab;
+  touch-action: none;
+  contain: paint;
+}
+
+.sheet-stage[hidden] {
+  display: none;
+}
+
+.sheet-stage[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.sheet-stage:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.sheet-pane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.sheet-pane img {
+  display: block;
+  max-width: none;
+  /* Crisp true pixels past 1:1; resampled below it. Never pixelate while downscaling -- that
+     aliases a fine grid into the image, which on this page reads as the very artifact the
+     sheets document. */
+  image-rendering: pixelated;
+}
+
+.sheet-stage[data-magnified="false"] .sheet-pane img {
+  image-rendering: auto;
+}
+
+.sheet-status:empty {
+  display: none;
+}
+
+.sheet-caption,
+.sheet-help {
+  margin: 8px 0 0;
+}

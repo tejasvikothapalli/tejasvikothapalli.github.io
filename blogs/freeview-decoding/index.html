@@ -381,6 +381,56 @@
         </div>
       </section>
 
+      <section id="progression" class="progression" aria-labelledby="progression-heading" hidden>
+        <div class="section-heading">
+          <div>
+            <h2 id="progression-heading">Model progression</h2>
+            <p>
+              <span>
+                Every change in the August 2026 decoder rebuild, one column each, for all 27 scenes.
+                These sheets include the restricted scenes, so they are published encrypted under the
+                same passphrase; the key is derived in your browser and a reload re-locks them.
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div class="sheet-toolbar">
+          <div id="sheet-animals" class="sheet-animals" role="group" aria-label="Choose an animal"></div>
+          <div class="sheet-zoom" role="group" aria-label="Zoom">
+            <button type="button" id="sheet-zoom-out" class="quiet-button" aria-label="Zoom out">&minus;</button>
+            <output id="sheet-zoom-level" aria-live="off">Fit</output>
+            <button type="button" id="sheet-zoom-in" class="quiet-button" aria-label="Zoom in">+</button>
+            <button type="button" id="sheet-fit" class="quiet-button">Fit width</button>
+            <button type="button" id="sheet-full" class="quiet-button">100%</button>
+          </div>
+          <a id="sheet-download" class="quiet-button sheet-download" download hidden>Download</a>
+        </div>
+
+        <div id="sheet-locked" class="sheet-locked">
+          <form id="sheet-unlock-form">
+            <label class="unlock-field">
+              <span>Passphrase</span>
+              <input id="sheet-pass" type="password" autocomplete="off" spellcheck="false" />
+            </label>
+            <button type="submit" class="quiet-button">Unlock sheets</button>
+          </form>
+          <p id="sheet-error" class="unlock-error" role="alert" hidden></p>
+        </div>
+
+        <div id="sheet-stage" class="sheet-stage" tabindex="0" role="img"
+             aria-label="Progression contact sheet, drag to pan and ctrl-scroll to zoom" hidden>
+          <div id="sheet-pane" class="sheet-pane"><img id="sheet-img" alt="" /></div>
+        </div>
+
+        <p id="sheet-status" class="panel-note sheet-status" aria-live="polite"></p>
+        <p id="sheet-caption" class="panel-note sheet-caption"></p>
+        <p class="panel-note sheet-help">
+          Drag to pan · double-click to zoom in and out · ctrl-scroll or the buttons to zoom ·
+          arrow keys to pan when focused.
+        </p>
+      </section>
+
       <section class="endmatter" aria-label="End matter">
         <div class="endmatter-row" id="acknowledgments">
           <div class="endmatter-title">
@@ -406,5 +456,6 @@
       </section>
     </main>
     <script src="./app.js" defer></script>
+    <script src="./sheets.js" defer></script>
   </body>
 </html>

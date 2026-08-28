@@ -1663,6 +1663,10 @@
     // Cheapest possible probe: a thumbnail either authenticates or it does not.
     const probe = await openSealed(key, `${restrictedRoot()}/${first.id}/thumb.webp.enc`);
     state.restricted.key = key;
+    // Let the progression sheets adopt the same passphrase rather than prompting a second time.
+    document.dispatchEvent(
+      new CustomEvent("freeview:restricted-unlocked", { detail: { passphrase } }),
+    );
     state.restricted.thumbs = new Map([[first.id, sealedUrl(probe, "image/webp", true)]]);
     const rest = state.restricted.index.scenes.slice(1);
     const thumbs = await Promise.all(
