@@ -1,2 +1,2 @@
-# Keep potentially restricted colony imagery available locally but out of the public site.
-data/scenes/colony-*/
+__pycache__/
+*.py[cod]

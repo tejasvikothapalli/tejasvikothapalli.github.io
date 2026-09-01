@@ -289,42 +289,39 @@
   color: var(--border);
 }
 
-/* The three core panels always share a row; each optional panel adds a column.
-   `data-columns` is set in app.js so one rule covers every combination. At six
-   panels the row wraps into two rows of three rather than shrinking every
-   canvas past the point of being readable. */
-.panel-grid,
-.panel-grid[data-columns="3"] {
+/* The four method panels share the first row. Diagnostics use a centered second
+   row so opening a tool never squeezes or reorders the primary comparison. */
+.panel-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 8px;
 }
 
-.panel-grid[data-columns="4"] {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.panel-grid .core-panel {
+  grid-column: span 3;
 }
 
-.panel-grid[data-columns="5"] {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+.panel-grid[data-columns="5"] .optional-panel:not([hidden]) {
+  grid-column: 4 / span 6;
 }
 
-.panel-grid[data-columns="6"] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.panel-grid[data-columns="6"] .optional-panel:not([hidden]) {
+  grid-column: span 6;
+}
+
+.panel-grid[data-columns="7"] .optional-panel:not([hidden]) {
+  grid-column: span 4;
 }
 
 @media (min-width: 901px) {
-  .panel-grid[data-columns="4"] .visual-panel figcaption,
-  .panel-grid[data-columns="5"] .visual-panel figcaption,
-  .panel-grid[data-columns="6"] .visual-panel figcaption {
+  .panel-grid .visual-panel figcaption {
     align-items: flex-start;
     flex-direction: column;
     justify-content: flex-start;
     min-height: 92px;
   }
 
-  .panel-grid[data-columns="4"] .panel-legend,
-  .panel-grid[data-columns="5"] .panel-legend,
-  .panel-grid[data-columns="6"] .panel-legend {
+  .panel-grid .panel-legend {
     flex-wrap: wrap;
     gap: 4px 7px;
   }
@@ -359,6 +356,41 @@
 
 .visual-panel figcaption > span:first-child {
   white-space: nowrap;
+}
+
+.transformer-panel figcaption {
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.transformer-caption {
+  display: grid;
+  gap: 3px;
+  white-space: normal !important;
+}
+
+.transformer-caption strong {
+  line-height: 1.25;
+}
+
+.transformer-caption em {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.transformer-caption b {
+  color: var(--text);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+@media (min-width: 681px) {
+  .panel-grid .core-panel figcaption {
+    min-height: 128px;
+  }
 }
 
 .visual-panel canvas {
@@ -945,6 +977,10 @@
   .panel-grid[data-columns] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .panel-grid .visual-panel {
+    grid-column: auto !important;
+  }
 }
 
 @media (max-width: 680px) {
@@ -1041,7 +1077,7 @@
      so these do not change with the page theme. */
   --fidelity-surface: #090e16;
   --fidelity-posterior: #3987e5;
-  --fidelity-evidence: #d95926;
+  --fidelity-transformer: #f08a24;
   --fidelity-grid: rgba(255, 255, 255, 0.14);
   --fidelity-axis: rgba(255, 255, 255, 0.34);
   --fidelity-ink: rgba(255, 255, 255, 0.94);
@@ -1060,10 +1096,10 @@
   border-color: var(--fidelity-posterior);
 }
 
-.legend-evidence {
+.legend-transformer {
   width: 12px;
   border-top-style: dashed;
-  border-color: var(--fidelity-evidence);
+  border-color: var(--fidelity-transformer);
 }
 
 /* Two explicit rows -- title with the selector beside it, legend below -- so
@@ -1279,258 +1315,4 @@
   .load-progress-bar {
     transition: none;
   }
-}
-
-/* Restricted scenes -------------------------------------------------------- */
-
-.scene-card.is-locked {
-  cursor: not-allowed;
-}
-
-.scene-card.is-locked img {
-  filter: grayscale(1) contrast(0.35) brightness(0.55);
-}
-
-.locked-tile {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: 322 / 90;
-  border-radius: 3px;
-  background: repeating-linear-gradient(
-    135deg,
-    #12161f,
-    #12161f 6px,
-    #0b0f17 6px,
-    #0b0f17 12px
-  );
-}
-
-.locked-tile svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.66);
-  stroke-width: 1.8;
-}
-
-.scene-card.is-locked span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.scene-card.is-locked span::after {
-  content: "Locked";
-  padding: 0 4px;
-  color: var(--faint);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-
-.unlock-note {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted);
-}
-
-.unlock-dialog {
-  max-width: 420px;
-  padding: 0;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-}
-
-.unlock-dialog::backdrop {
-  background: rgba(9, 14, 22, 0.55);
-}
-
-.unlock-dialog form {
-  display: grid;
-  gap: 10px;
-  padding: 16px;
-}
-
-.unlock-dialog h3 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.unlock-dialog p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.unlock-field {
-  display: grid;
-  gap: 4px;
-}
-
-.unlock-field span {
-  color: var(--faint);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.unlock-field input {
-  min-height: 36px;
-  padding: 7px 10px;
-  color: var(--text);
-  font: inherit;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-}
-
-.unlock-error {
-  color: #d03b3b;
-  font-size: 12px;
-}
-
-.unlock-error[hidden] {
-  display: none;
-}
-
-.unlock-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 7px;
-}
-
-/* ---- progression contact sheets ------------------------------------------------------- */
-
-.progression[hidden] {
-  display: none;
-}
-
-.sheet-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 14px 0 10px;
-}
-
-.sheet-animals,
-.sheet-zoom {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sheet-zoom {
-  margin-left: auto;
-}
-
-.sheet-animals button,
-.sheet-zoom button,
-.sheet-download {
-  padding: 5px 12px;
-  cursor: pointer;
-}
-
-.sheet-animals button[aria-pressed="true"] {
-  border-color: var(--link);
-  color: var(--link);
-}
-
-.sheet-zoom output {
-  min-width: 4.5ch;
-  text-align: center;
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.sheet-download {
-  text-decoration: none;
-  display: inline-block;
-}
-
-.sheet-download[hidden] {
-  display: none;
-}
-
-.sheet-locked {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--panel);
-}
-
-.sheet-locked form {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.sheet-locked[hidden] {
-  display: none;
-}
-
-.sheet-stage {
-  position: relative;
-  overflow: hidden;
-  height: min(78vh, 760px);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  background: var(--panel);
-  cursor: grab;
-  touch-action: none;
-  contain: paint;
-}
-
-.sheet-stage[hidden] {
-  display: none;
-}
-
-.sheet-stage[data-dragging="true"] {
-  cursor: grabbing;
-}
-
-.sheet-stage:focus-visible {
-  outline: 2px solid var(--link);
-  outline-offset: 2px;
-}
-
-.sheet-pane {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  will-change: transform;
-}
-
-.sheet-pane img {
-  display: block;
-  max-width: none;
-  /* Crisp true pixels past 1:1; resampled below it. Never pixelate while downscaling -- that
-     aliases a fine grid into the image, which on this page reads as the very artifact the
-     sheets document. */
-  image-rendering: pixelated;
-}
-
-.sheet-stage[data-magnified="false"] .sheet-pane img {
-  image-rendering: auto;
-}
-
-.sheet-status:empty {
-  display: none;
-}
-
-.sheet-caption,
-.sheet-help {
-  margin: 8px 0 0;
 }

@@ -96,6 +96,14 @@ a:hover { color: var(--link-hover); }
   gap: 10px;
   min-width: 0;
 }
+.brand-link { text-decoration: none; }
+.brand-link:hover .site,
+.brand-link:hover .section { color: var(--link-hover); }
+.brand-link:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 .brand .site {
   font-weight: 650;
   letter-spacing: 0.2px;
@@ -166,6 +174,11 @@ h1 {
 .v { color: var(--text); }
 .authors { color: var(--muted); }
 .authors a { color: var(--link); }
+.authors .author-link {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
 
 /* Layout: main + toc */
 .grid {

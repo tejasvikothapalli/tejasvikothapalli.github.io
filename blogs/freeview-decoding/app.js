@@ -19,6 +19,7 @@
   const timeline = document.querySelector("#timeline");
   const progressFixation = document.querySelector("#progress-fixation");
   const progressTime = document.querySelector("#progress-time");
+  const transformerTokenCount = document.querySelector("#transformer-token-count");
   const play = document.querySelector("#play");
   const speed = document.querySelector("#speed");
   const patchToggle = document.querySelector("#patch-toggle");
@@ -48,18 +49,12 @@
   const langevinSnrValue = document.querySelector("#langevin-snr-value");
   const langevinIterations = document.querySelector("#langevin-iterations");
   const langevinDeviation = document.querySelector("#langevin-deviation");
-  const unlockDialog = document.querySelector("#unlock-dialog");
-  const unlockForm = document.querySelector("#unlock-form");
-  const unlockPassword = document.querySelector("#unlock-password");
-  const unlockError = document.querySelector("#unlock-error");
-  const unlockCancel = document.querySelector("#unlock-cancel");
-  const unlockSubmit = document.querySelector("#unlock-submit");
-
   const canvases = {
     truth: document.querySelector("#truth-canvas"),
     density: document.querySelector("#density-canvas"),
     evidence: document.querySelector("#evidence-canvas"),
     posterior: document.querySelector("#posterior-canvas"),
+    transformer: document.querySelector("#transformer-canvas"),
     raster: document.querySelector("#raster-canvas"),
     groundTruthPatch: document.querySelector("#ground-truth-patch-canvas"),
     patch: document.querySelector("#patch-canvas"),
@@ -67,11 +62,12 @@
     langevin: document.querySelector("#langevin-canvas"),
   };
 
-  // One animal per data root: data/<animal>/manifest.json + scenes + restricted.
+  // One animal per data root: data/<animal>/manifest.json + scenes.
   const ANIMALS = [
     { id: "allen", label: "Allen" },
     { id: "logan", label: "Logan" },
   ];
+  const DATA_VERSION = "20260901-3";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -110,7 +106,6 @@
       canvas: null,
       source: null,
     },
-    restricted: { index: null, key: null, thumbs: new Map(), urls: [], passphrase: null },
   };
 
   speed.value = String(state.speed);
@@ -462,15 +457,23 @@
     return context;
   }
 
-  function drawHull(context, hull) {
-    if (!hull || hull.length < 4) return;
-    context.save();
+  function traceHull(context, hull) {
+    if (!hull || hull.length < 6) return false;
     context.beginPath();
     context.moveTo(hull[0] / 10, hull[1] / 10);
     for (let index = 2; index < hull.length; index += 2) {
       context.lineTo(hull[index] / 10, hull[index + 1] / 10);
     }
     context.closePath();
+    return true;
+  }
+
+  function drawHull(context, hull) {
+    context.save();
+    if (!traceHull(context, hull)) {
+      context.restore();
+      return;
+    }
     context.strokeStyle = colors.hull;
     context.lineWidth = 4;
     context.lineJoin = "round";
@@ -558,6 +561,128 @@
       canvas.height,
     );
     return context;
+  }
+
+  function drawImageInsideHull(context, image, hull, alpha = 1) {
+    context.save();
+    if (!traceHull(context, hull)) {
+      context.restore();
+      return;
+    }
+    context.clip();
+    context.globalAlpha = alpha;
+    context.drawImage(image, 0, 0, context.canvas.width, context.canvas.height);
+    context.restore();
+  }
+
+  function drawTransformerSprite(context, image, progress, frameIndex) {
+    const sourceX = (frameIndex % progress.spriteColumns) * progress.frameWidth;
+    const sourceY = Math.floor(frameIndex / progress.spriteColumns) * progress.frameHeight;
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      progress.frameWidth,
+      progress.frameHeight,
+      0,
+      0,
+      context.canvas.width,
+      context.canvas.height,
+    );
+  }
+
+  function drawTransformerFrame(context, progress, frameIndex, alpha = 1) {
+    context.save();
+    context.globalAlpha = Math.max(0, Math.min(1, alpha));
+    if (frameIndex === progress.counts.length - 1) {
+      context.drawImage(state.images.transformer, 0, 0, context.canvas.width, context.canvas.height);
+    } else {
+      drawTransformerSprite(context, state.images.transformerPrefix, progress, frameIndex);
+    }
+    context.restore();
+  }
+
+  // Prefix frames are exact streamlined-decoder reruns. Every fixation is
+  // rendered between its two neighboring exact frames using both fixation
+  // progress and the number of 33 ms tokens actually admitted, so the
+  // reconstruction changes on every fixation instead of freezing between
+  // checkpoints. The terminal frame remains the shipped BEST bundle.
+  function drawTransformer() {
+    const canvas = canvases.transformer;
+    const context = clearCanvas(canvas);
+    const progress = state.scene.transformerProgress;
+
+    if (
+      progress?.mode?.startsWith("exact-checkpointed-prefix-inference") &&
+      progress.counts?.length &&
+      state.images.transformerPrefix
+    ) {
+      let index = 0;
+      while (
+        index + 1 < progress.counts.length &&
+        progress.counts[index + 1] <= state.count
+      ) {
+        index += 1;
+      }
+      const fixationTokens = progress.fixationTokenCounts;
+      const tokens = Number.isFinite(fixationTokens?.[state.count])
+        ? fixationTokens[state.count]
+        : progress.tokenCounts?.[index];
+      transformerTokenCount.textContent = Number.isFinite(tokens)
+        ? `${tokens.toLocaleString()} × 33 ms tokens`
+        : "33 ms tiled tokens";
+
+      drawTransformerFrame(context, progress, index);
+      if (index + 1 < progress.counts.length) {
+        const leftTokens = Number(progress.tokenCounts?.[index]);
+        const rightTokens = Number(progress.tokenCounts?.[index + 1]);
+        const tokenSpan = rightTokens - leftTokens;
+        const countSpan = progress.counts[index + 1] - progress.counts[index];
+        const countFraction = countSpan > 0
+          ? (state.count - progress.counts[index]) / countSpan
+          : 0;
+        const tokenFraction = Number.isFinite(tokens) && tokenSpan > 0
+          ? (tokens - leftTokens) / tokenSpan
+          : countFraction;
+        // Token counts can occasionally be unchanged for a rejected/duplicate
+        // fixation. Mixing in fixation progress guarantees a distinct visual
+        // state for every step while exact anchor frames remain exact.
+        const fraction = (tokenFraction + countFraction) / 2;
+        drawTransformerFrame(context, progress, index + 1, fraction);
+      }
+      return;
+    }
+
+    transformerTokenCount.textContent = "33 ms tiled tokens";
+
+    context.save();
+    if (traceHull(context, state.scene.hull)) {
+      context.fillStyle = "#808080";
+      context.fill();
+    }
+    context.restore();
+
+    if (!progress?.counts?.length || !progress?.hulls?.length) {
+      drawImageInsideHull(context, state.images.transformer, state.scene.hull);
+      return;
+    }
+
+    const counts = progress.counts;
+    let index = 0;
+    while (index + 1 < counts.length && counts[index + 1] <= state.count) index += 1;
+    drawImageInsideHull(context, state.images.transformer, progress.hulls[index]);
+
+    if (index + 1 < counts.length) {
+      const span = counts[index + 1] - counts[index];
+      const fraction = span > 0 ? (state.count - counts[index]) / span : 1;
+      const eased = fraction * fraction * (3 - 2 * fraction);
+      drawImageInsideHull(
+        context,
+        state.images.transformer,
+        progress.hulls[index + 1],
+        Math.max(0, Math.min(1, eased)),
+      );
+    }
   }
 
   function drawReplaySlice(canvas, column) {
@@ -694,13 +819,19 @@
 
   const FIDELITY_METRICS = {
     psnr: { axis: "PSNR (dB)", short: "PSNR", suffix: " dB", digits: 2 },
+    ssim: { axis: "SSIM", short: "SSIM", suffix: "", digits: 3 },
     rmse: { axis: "RMSE (intensity)", short: "RMSE", suffix: "", digits: 4 },
     correlation: { axis: "Correlation (r)", short: "r", suffix: "", digits: 3 },
   };
 
   const FIDELITY_SERIES = [
     { key: "posterior", label: "1/f reconstruction", color: "--fidelity-posterior", dash: [] },
-    { key: "evidence", label: "Decoded patches", color: "--fidelity-evidence", dash: [26, 18] },
+    {
+      key: "transformer",
+      label: "End-to-end transformer",
+      color: "--fidelity-transformer",
+      dash: [26, 18],
+    },
   ];
 
   // Layout is always computed in this fixed coordinate space, so the plot can
@@ -919,12 +1050,13 @@
     const strokes = FIDELITY_SERIES.map((definition) => ({
       ...definition,
       values: fidelity.series[definition.key][plot.metricKey],
+      counts: fidelity.series[definition.key].counts ?? fidelity.counts,
       stroke: styles.getPropertyValue(definition.color).trim(),
     }));
     for (const entry of strokes) {
       context.save();
       context.beginPath();
-      fidelity.counts.forEach((count, index) => {
+      entry.counts.forEach((count, index) => {
         const x = plot.x(count);
         const y = plot.y(entry.values[index]);
         if (index === 0) context.moveTo(x, y);
@@ -950,7 +1082,7 @@
     context.stroke();
     context.restore();
     for (const entry of strokes) {
-      const value = fidelityValueAt(entry.values, fidelity.counts, state.count);
+      const value = fidelityValueAt(entry.values, entry.counts, state.count);
       context.beginPath();
       context.arc(markerX, plot.y(value), 15, 0, Math.PI * 2);
       context.fillStyle = entry.stroke;
@@ -1201,14 +1333,13 @@
     }
   }
 
-  // One source of truth for the panel row: three base panels plus whichever
-  // optional panels are open. Six panels wrap into two rows of three instead of
-  // squeezing every canvas below a legible width.
+  // One source of truth for the panel row: four comparison panels plus whichever
+  // optional diagnostic panels are open.
   function updatePanelColumns() {
     const optional = [densityPanel, langevinPanel, fidelityPanel].filter(
       (panel) => !panel.hidden,
     ).length;
-    panelGrid.dataset.columns = String(3 + optional);
+    panelGrid.dataset.columns = String(4 + optional);
   }
 
   function drawPatch(current) {
@@ -1337,6 +1468,7 @@
       evidenceContext = drawSprite(canvases.evidence, state.images.evidence, frameIndex);
       drawSprite(canvases.posterior, state.images.posterior, frameIndex);
     }
+    drawTransformer();
 
     if (current >= 0) {
       const [x, y] = roundedPoint(state.scene.gaze, current);
@@ -1541,156 +1673,6 @@
     state.replayObjectUrl = null;
   }
 
-  // Restricted scenes ---------------------------------------------------------
-  //
-  // The imagery ships as AES-256-GCM ciphertext; only the scene names are in the
-  // clear. The key is derived from a passphrase and held in memory alone, so a
-  // reload re-locks everything. Nothing is written to storage.
-
-  function restrictedRoot() {
-    return `${dataRoot()}/restricted`;
-  }
-
-  function base64Bytes(value) {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return bytes;
-  }
-
-  async function loadRestrictedIndex() {
-    try {
-      const response = await fetch(`${restrictedRoot()}/index.json`);
-      if (!response.ok) return null;
-      const index = await response.json();
-      return index?.scenes?.length ? index : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function deriveRestrictedKey(passphrase) {
-    const { kdf } = state.restricted.index;
-    const material = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(passphrase),
-      "PBKDF2",
-      false,
-      ["deriveKey"],
-    );
-    return crypto.subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt: base64Bytes(kdf.salt),
-        iterations: kdf.iterations,
-        hash: kdf.hash,
-      },
-      material,
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["decrypt"],
-    );
-  }
-
-  async function openSealed(key, path) {
-    const response = await fetch(path);
-    if (!response.ok) throw new Error(`${path} returned ${response.status}`);
-    const sealed = new Uint8Array(await response.arrayBuffer());
-    // A wrong key fails the GCM tag here rather than yielding garbage.
-    return crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: sealed.subarray(0, 12) },
-      key,
-      sealed.subarray(12),
-    );
-  }
-
-  function sealedUrl(buffer, type, keep = false) {
-    const url = URL.createObjectURL(new Blob([buffer], { type }));
-    if (!keep) state.restricted.urls.push(url);
-    return url;
-  }
-
-  // Thumbnails live for the session; a scene's assets only until the next scene.
-  function releaseRestrictedSceneUrls() {
-    for (const url of state.restricted.urls) URL.revokeObjectURL(url);
-    state.restricted.urls = [];
-  }
-
-  const RESTRICTED_TYPES = {
-    "original.webp": "image/webp",
-    "thumb.webp": "image/webp",
-    "density.webp": "image/webp",
-    "evidence.webp": "image/webp",
-    "posterior.webp": "image/webp",
-    "patches.webp": "image/webp",
-    "truth-patches.webp": "image/webp",
-    "trial-rasters.webp": "image/webp",
-    "replay.mp4": "video/mp4",
-  };
-
-  const RESTRICTED_ASSET_KEYS = {
-    original: "original.webp",
-    density: "density.webp",
-    evidence: "evidence.webp",
-    posterior: "posterior.webp",
-    patches: "patches.webp",
-    truthPatches: "truth-patches.webp",
-    trialRasters: "trial-rasters.webp",
-    replay: "replay.mp4",
-  };
-
-  // Decrypt one scene into blob URLs so every downstream loader is unchanged.
-  async function openRestrictedScene(record) {
-    const key = state.restricted.key;
-    const base = `${restrictedRoot()}/${record.id}`;
-    const scene = JSON.parse(
-      new TextDecoder().decode(await openSealed(key, `${base}/scene.json.enc`)),
-    );
-    const names = Object.entries(RESTRICTED_ASSET_KEYS);
-    const buffers = await Promise.all(
-      names.map(([, file]) => openSealed(key, `${base}/${file}.enc`)),
-    );
-    const paths = Object.fromEntries(
-      names.map(([key_, file], index) => [key_, sealedUrl(buffers[index], RESTRICTED_TYPES[file])]),
-    );
-    return { scene, paths };
-  }
-
-  async function unlockRestricted(passphrase) {
-    const key = await deriveRestrictedKey(passphrase);
-    state.restricted.passphrase = passphrase;
-    const first = state.restricted.index.scenes[0];
-    // Cheapest possible probe: a thumbnail either authenticates or it does not.
-    const probe = await openSealed(key, `${restrictedRoot()}/${first.id}/thumb.webp.enc`);
-    state.restricted.key = key;
-    // Let the progression sheets adopt the same passphrase rather than prompting a second time.
-    document.dispatchEvent(
-      new CustomEvent("freeview:restricted-unlocked", { detail: { passphrase } }),
-    );
-    state.restricted.thumbs = new Map([[first.id, sealedUrl(probe, "image/webp", true)]]);
-    const rest = state.restricted.index.scenes.slice(1);
-    const thumbs = await Promise.all(
-      rest.map((record) => openSealed(key, `${restrictedRoot()}/${record.id}/thumb.webp.enc`)),
-    );
-    rest.forEach((record, index) => {
-      state.restricted.thumbs.set(record.id, sealedUrl(thumbs[index], "image/webp", true));
-    });
-    buildSceneGrid(state.manifest);
-  }
-
-  function showUnlockDialog(pending = false) {
-    unlockError.hidden = !pending;
-    if (pending) {
-      unlockError.textContent =
-        `These scenes are being re-encrypted for the new decoder — expected by ${REBUILD_ETA}.`;
-    }
-    unlockPassword.disabled = pending;
-    unlockSubmit.disabled = pending;
-    unlockPassword.value = "";
-    if (typeof unlockDialog.showModal === "function") unlockDialog.showModal();
-    unlockPassword.focus();
-  }
-
   function selectCard(slug) {
     grid.querySelectorAll(".scene-card").forEach((card) => {
       const selected = card.dataset.slug === slug;
@@ -1704,25 +1686,17 @@
     setPlaying(false);
     hideSceneMagnifier();
     releaseReplay();
-    releaseRestrictedSceneUrls();
     setBusy(true);
     selectCard(record.slug);
     viewerTitle.textContent = record.title;
     try {
-      let scene;
-      let paths;
-      if (record.restricted) {
-        if (!state.restricted.key) throw new Error("restricted scene is locked");
-        setBusy(true, "Decrypting scene…");
-        ({ scene, paths } = await openRestrictedScene(record));
-        if (token !== state.loadToken) return;
-      } else {
-        const response = await fetch(`${dataRoot()}/${record.data}`);
-        if (!response.ok) throw new Error(`Scene metadata returned ${response.status}`);
-        scene = await response.json();
-        paths = imagePaths(scene, `${dataRoot()}/${record.data}`);
-      }
-      const names = ["original", "density", "evidence", "posterior"];
+      const dataPath = `${dataRoot()}/${record.data}`;
+      const response = await fetch(`${dataPath}?v=${DATA_VERSION}`);
+      if (!response.ok) throw new Error(`Scene metadata returned ${response.status}`);
+      const scene = await response.json();
+      const paths = imagePaths(scene, dataPath);
+      const names = ["original", "density", "evidence", "posterior", "transformer"];
+      if (paths.transformerPrefix) names.push("transformerPrefix");
       const loaded = await Promise.all(names.map((name) => loadImage(paths[name])));
       if (token !== state.loadToken) return;
       state.scene = scene;
@@ -1776,9 +1750,9 @@
   function buildSceneGrid(manifest) {
     const fragment = document.createDocumentFragment();
     const rank = new Map(preferredSceneOrder.map((slug, index) => [slug, index]));
-    const records = manifest.scenes
-      .filter((record) => !record.slug.startsWith("colony-"))
-      .sort((a, b) => (rank.get(a.slug) ?? 999) - (rank.get(b.slug) ?? 999));
+    const records = [...manifest.scenes].sort(
+      (a, b) => (rank.get(a.slug) ?? 999) - (rank.get(b.slug) ?? 999),
+    );
     records.forEach((record) => {
       const button = document.createElement("button");
       button.className = "scene-card";
@@ -1786,7 +1760,10 @@
       button.role = "option";
       button.dataset.slug = record.slug;
       button.setAttribute("aria-selected", "false");
-      button.setAttribute("aria-label", `${record.title}: original and decoded`);
+      button.setAttribute(
+        "aria-label",
+        `${record.title}: original and transformer reconstruction`,
+      );
 
       const image = document.createElement("img");
       image.src = `${dataRoot()}/${record.thumb}`;
@@ -1802,75 +1779,9 @@
       button.addEventListener("click", () => selectScene(record, { focusViewer: true }));
       fragment.append(button);
     });
-    // The colony scenes are in the manifest but filtered from the public grid.
-    // Until their encrypted set is rebuilt, still show them as locked cards so the
-    // picker is complete; clicking one explains rather than offering a passphrase
-    // that cannot work yet.
-    const sealed = state.restricted.index?.scenes ?? [];
-    const restricted = sealed.length
-      ? sealed
-      : manifest.scenes
-          .filter((record) => record.slug.startsWith("colony-"))
-          .map((record) => ({ ...record, id: null, pending: true }));
-    const unlocked = Boolean(state.restricted.key);
-    restricted.forEach((record) => {
-      const button = document.createElement("button");
-      button.className = unlocked ? "scene-card" : "scene-card is-locked";
-      button.type = "button";
-      button.role = "option";
-      button.dataset.slug = record.slug;
-      button.dataset.restricted = record.id;
-      button.setAttribute("aria-selected", "false");
-
-      if (unlocked) {
-        const image = document.createElement("img");
-        image.src = state.restricted.thumbs.get(record.id);
-        image.alt = "";
-        image.width = 322;
-        image.height = 90;
-        image.decoding = "async";
-        const label = document.createElement("span");
-        label.textContent = record.title;
-        button.append(image, label);
-        button.setAttribute("aria-label", `${record.title}: original and decoded`);
-        button.addEventListener("click", () =>
-          selectScene({ ...record, restricted: true }, { focusViewer: true }),
-        );
-      } else {
-        // Locked: the name shows, the pixels do not, and the card cannot open
-        // the viewer. Clicking it offers the passphrase instead.
-        const tile = document.createElement("div");
-        tile.className = "locked-tile";
-        tile.innerHTML =
-          '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-          '<rect x="5" y="11" width="14" height="9" rx="2"></rect>' +
-          '<path d="M8.5 11V7.8a3.5 3.5 0 0 1 7 0V11"></path></svg>';
-        const label = document.createElement("span");
-        label.textContent = record.title;
-        button.append(tile, label);
-        button.setAttribute(
-          "aria-label",
-          record.pending
-            ? `${record.title}: locked, encrypted set rebuilding`
-            : `${record.title}: locked, passphrase required`,
-        );
-        button.setAttribute("aria-disabled", "true");
-        button.addEventListener("click", () => showUnlockDialog(Boolean(record.pending)));
-      }
-      fragment.append(button);
-    });
-
     grid.replaceChildren(fragment);
-    const shown = records.length + restricted.length;
-    sceneCount.textContent = `${shown} scenes · original | decoded`;
-    if (restricted.length && !unlocked) {
-      const note = document.createElement("span");
-      note.className = "unlock-note";
-      note.textContent = sealed.length
-        ? `${restricted.length} restricted scenes are locked — click one to enter the passphrase.`
-        : `${restricted.length} restricted scenes are locked while their encrypted set is rebuilt.`;
-      sceneCount.append(note);
-    }
+    sceneCount.textContent =
+      `${records.length} scenes · original | transformer reconstruction`;
   }
 
   function stopArrowHold() {
@@ -1966,29 +1877,6 @@
 
   patchToggle.addEventListener("click", () => {
     setPatchDrawerVisible(patchDrawer.hidden, { scroll: true });
-  });
-
-  unlockCancel.addEventListener("click", () => unlockDialog.close());
-
-  unlockForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const passphrase = unlockPassword.value;
-    if (!passphrase) return;
-    unlockError.hidden = true;
-    unlockSubmit.disabled = true;
-    unlockSubmit.textContent = "Unlocking…";
-    try {
-      await unlockRestricted(passphrase);
-      unlockDialog.close();
-    } catch (error) {
-      console.error(error);
-      unlockError.textContent = "That passphrase did not unlock the scenes.";
-      unlockError.hidden = false;
-      unlockPassword.select();
-    } finally {
-      unlockSubmit.disabled = false;
-      unlockSubmit.textContent = "Unlock";
-    }
   });
 
   langevinToggle.addEventListener("click", () => {
@@ -2094,7 +1982,7 @@
 
   async function loadAnimalManifest(animal) {
     if (state.animalManifests.has(animal)) return state.animalManifests.get(animal);
-    const response = await fetch(`${dataRoot(animal)}/manifest.json`);
+    const response = await fetch(`${dataRoot(animal)}/manifest.json?v=${DATA_VERSION}`);
     if (!response.ok) throw new Error(`Manifest returned ${response.status}`);
     const manifest = await response.json();
     state.animalManifests.set(animal, manifest);
@@ -2150,24 +2038,11 @@
     const previousSlug = state.scene?.slug;
     setPlaying(false);
     releaseReplay();
-    releaseRestrictedSceneUrls();
-    for (const url of state.restricted.thumbs.values()) URL.revokeObjectURL(url);
-    const passphrase = state.restricted.passphrase ?? null;
     state.animal = animal;
-    state.restricted = { index: null, key: null, thumbs: new Map(), urls: [], passphrase };
     state.langevin.token = -1;
     setBusy(true, "Loading animal…");
     const manifest = await loadAnimalManifest(animal);
     state.manifest = manifest;
-    state.restricted.index = await loadRestrictedIndex();
-    // Same passphrase, different salt per animal: re-derive so an unlock carries over.
-    if (passphrase && state.restricted.index) {
-      try {
-        await unlockRestricted(passphrase);
-      } catch (error) {
-        console.error(error);
-      }
-    }
     markAnimal();
     buildSceneGrid(manifest);
     const record =

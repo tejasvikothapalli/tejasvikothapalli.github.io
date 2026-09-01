@@ -9,17 +9,17 @@
       content="Interactive reconstructions of static natural scenes from free-viewing V1 activity."
     />
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="../denoising/style.css" />
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="../denoising/style.css?v=20260901-3" />
+    <link rel="stylesheet" href="./style.css?v=20260901-3" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
-        <div class="brand">
+        <a class="brand brand-link" href="../index.html" aria-label="Back to all blogs">
           <div class="site">Tejasvi Kothapalli</div>
           <div class="pipe">/</div>
           <div class="section">Blogs</div>
-        </div>
+        </a>
         <nav class="topnav" aria-label="Site navigation">
           <a href="../../index.html">Home</a>
           <a href="../index.html">Blogs</a>
@@ -39,6 +39,7 @@
           <span class="k">Authors</span>
           <span class="v authors">
             Tejasvi Kothapalli<sup>1</sup>,
+            <a href="https://www.rctn.org/bruno/">Bruno Olshausen</a><sup>1</sup>,
             <a href="https://jake.vision/">Jacob Yates</a><sup>1</sup>
           </span>
         </div>
@@ -53,7 +54,7 @@
         <div class="meta-row">
           <span class="k">Tags</span>
           <span class="v muted">
-            Decoding, Denoising, Natural Scenes, 1/f<sup>2</sup>, Free-viewing, V1, Fovea
+            Decoding, Denoising, Natural Scenes, Transformers, 1/f<sup>2</sup>, Free-viewing, V1
           </span>
         </div>
       </section>
@@ -62,17 +63,18 @@
         <span>Abstract</span>
         <p>
           To our knowledge, decoding a full static natural scene from V1 activity during natural
-          vision has never been done. Here, we present an attempt to reconstruct a static scene
-          from V1 activity while a marmoset freely views it. We record neural activity from
-          marmoset foveal V1. Due to retinotopy and the recording location, all recorded cells
-          respond to a ~0.5° × 0.5° region of visual space near the center of gaze. At every
-          fixation, ridge regression predicts this gaze-contingent patch from the population’s neural
-          activity. Eye position places each decoded patch in scene coordinates; patches
-          accumulated across fixations and sessions are then combined with a 1/f prior to
-          reconstruct the full scene. The interactive visualization below shows both patch-level
-          decoding fidelity and the resulting full-scene reconstruction, for each of the two
-          animals. Every reconstruction is
-          fully held out: the decoder was never trained on the scene it reconstructs.
+          vision has never been done. Here, we present two complementary methods for reconstructing
+          a static scene from V1 activity while a marmoset freely views it. We record neural activity
+          from marmoset foveal V1. Due to retinotopy and the recording location, all recorded cells
+          respond to a ~0.5° × 0.5° region of visual space near the center of gaze. Our first,
+          principled two-stage method uses ridge regression to predict this gaze-contingent patch at
+          every fixation. Eye position places each decoded patch in scene coordinates; patches
+          accumulated across fixations and sessions are then combined with a 1/f prior to reconstruct
+          the full scene. Our second method uses state-of-the-art deep learning to build a foundation
+          decoder: a transformer consumes streamlined 33 ms neural tokens and directly reconstructs
+          the scene, without explicit fixation detection, saccade excision, or hand-tuned event rules.
+          The interactive visualization compares both methods for each animal. Every reconstruction
+          is fully held out—the decoder was never trained on the scene it reconstructs.
         </p>
       </aside>
 
@@ -100,25 +102,6 @@
         </div>
         <div id="scene-grid" class="scene-grid" role="listbox" aria-label="Choose a scene"></div>
 
-        <dialog id="unlock-dialog" class="unlock-dialog" aria-labelledby="unlock-title">
-          <form method="dialog" id="unlock-form">
-            <h3 id="unlock-title">Restricted scenes</h3>
-            <p>
-              These recordings are held back pending image-use approval. The imagery is
-              published encrypted; a passphrase decrypts it in your browser for this visit only.
-              Reloading the page locks them again.
-            </p>
-            <label class="unlock-field">
-              <span>Passphrase</span>
-              <input id="unlock-password" type="password" autocomplete="off" spellcheck="false" />
-            </label>
-            <p id="unlock-error" class="unlock-error" role="alert" hidden></p>
-            <div class="unlock-actions">
-              <button type="button" id="unlock-cancel" class="quiet-button">Cancel</button>
-              <button type="submit" id="unlock-submit" class="quiet-button">Unlock</button>
-            </div>
-          </form>
-        </dialog>
       </section>
 
       <section id="viewer" class="viewer" aria-labelledby="viewer-title" aria-busy="true" tabindex="0">
@@ -157,14 +140,14 @@
         </div>
 
         <ol id="keyboard-hint" class="keyboard-hint">
-          <li>Click a point in the original scene to view its patch-decoding fidelity.</li>
+          <li>Click a point in the original scene to inspect the separate local patch decoder.</li>
           <li class="keyboard-instruction">
             <kbd>←</kbd><kbd>→</kbd> step through fixations · hold to accelerate
           </li>
         </ol>
 
         <div class="panel-grid">
-          <figure class="visual-panel">
+          <figure class="visual-panel core-panel">
             <figcaption>
               <span>Static natural scene</span>
               <span class="panel-legend">
@@ -191,24 +174,14 @@
             </div>
           </figure>
 
-          <figure id="density-panel" class="visual-panel" hidden>
-            <figcaption>
-              <span>Fixation density</span>
-              <span class="panel-legend">
-                <span><i class="legend-line legend-hull"></i>Hull</span>
-              </span>
-            </figcaption>
-            <canvas id="density-canvas" width="1280" height="720"></canvas>
-          </figure>
-
-          <figure class="visual-panel">
+          <figure class="visual-panel core-panel">
             <figcaption>
               <span>Decoded patches</span>
             </figcaption>
             <canvas id="evidence-canvas" width="1280" height="720"></canvas>
           </figure>
 
-          <figure class="visual-panel">
+          <figure class="visual-panel core-panel">
             <figcaption>
               <span>1/f reconstruction</span>
               <span
@@ -221,7 +194,39 @@
             <canvas id="posterior-canvas" width="1280" height="720"></canvas>
           </figure>
 
-          <figure id="langevin-panel" class="visual-panel langevin-panel" hidden>
+          <figure class="visual-panel core-panel transformer-panel">
+            <figcaption>
+              <span class="transformer-caption">
+                <strong>End-to-end transformer reconstruction</strong>
+                <em>33 ms neural tokens + gaze position → full scene directly</em>
+                <b>No patch decoder · No fixation segmentation · No 1/f reconstruction</b>
+              </span>
+              <span
+                class="panel-legend"
+                title="Exact held-out transformer checkpoints are aligned to the source 120 Hz clock. Every fixation gets a distinct state between adjacent checkpoints, guided by fixation progress and its exact accumulated 33 ms token count. The final frame comes directly from the shipped result bundle."
+              >
+                <span id="transformer-token-count">33 ms tiled tokens</span>
+              </span>
+            </figcaption>
+            <canvas
+              id="transformer-canvas"
+              width="1280"
+              height="720"
+              aria-label="Fixation-resolved transformer scene reconstruction as 33 ms tiled neural tokens accumulate."
+            ></canvas>
+          </figure>
+
+          <figure id="density-panel" class="visual-panel optional-panel" hidden>
+            <figcaption>
+              <span>Fixation density</span>
+              <span class="panel-legend">
+                <span><i class="legend-line legend-hull"></i>Hull</span>
+              </span>
+            </figcaption>
+            <canvas id="density-canvas" width="1280" height="720"></canvas>
+          </figure>
+
+          <figure id="langevin-panel" class="visual-panel optional-panel langevin-panel" hidden>
             <figcaption>
               <span>Langevin sample</span>
               <span class="panel-legend langevin-legend">
@@ -237,20 +242,21 @@
             ></canvas>
           </figure>
 
-          <figure id="fidelity-panel" class="visual-panel fidelity-panel" hidden>
+          <figure id="fidelity-panel" class="visual-panel optional-panel fidelity-panel" hidden>
             <figcaption>
               <span>Reconstruction fidelity</span>
               <label class="fidelity-metric">
                 <span class="sr-only">Fidelity metric</span>
                 <select id="fidelity-metric" aria-label="Fidelity metric">
                   <option value="psnr" selected>PSNR (dB)</option>
+                  <option value="ssim">SSIM</option>
                   <option value="rmse">RMSE</option>
                   <option value="correlation">Correlation</option>
                 </select>
               </label>
               <span class="panel-legend fidelity-legend">
                 <span><i class="legend-line legend-posterior"></i>1/f reconstruction</span>
-                <span><i class="legend-line legend-evidence"></i>Decoded patches</span>
+                <span><i class="legend-line legend-transformer"></i>End-to-end transformer</span>
               </span>
             </figcaption>
             <div class="canvas-stage">
@@ -258,7 +264,7 @@
                 id="fidelity-canvas"
                 width="1280"
                 height="720"
-                aria-label="Reconstruction fidelity against fixation count and viewing time. Click to jump the timeline."
+                aria-label="Fidelity of the 1/f and end-to-end transformer reconstructions against fixation count and viewing time. Click to jump the timeline."
               ></canvas>
               <p id="fidelity-pending" class="panel-pending" hidden></p>
             </div>
@@ -381,56 +387,6 @@
         </div>
       </section>
 
-      <section id="progression" class="progression" aria-labelledby="progression-heading" hidden>
-        <div class="section-heading">
-          <div>
-            <h2 id="progression-heading">Model progression</h2>
-            <p>
-              <span>
-                Every change in the August 2026 decoder rebuild, one column each, for all 27 scenes.
-                These sheets include the restricted scenes, so they are published encrypted under the
-                same passphrase; the key is derived in your browser and a reload re-locks them.
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <div class="sheet-toolbar">
-          <div id="sheet-animals" class="sheet-animals" role="group" aria-label="Choose an animal"></div>
-          <div class="sheet-zoom" role="group" aria-label="Zoom">
-            <button type="button" id="sheet-zoom-out" class="quiet-button" aria-label="Zoom out">&minus;</button>
-            <output id="sheet-zoom-level" aria-live="off">Fit</output>
-            <button type="button" id="sheet-zoom-in" class="quiet-button" aria-label="Zoom in">+</button>
-            <button type="button" id="sheet-fit" class="quiet-button">Fit width</button>
-            <button type="button" id="sheet-full" class="quiet-button">100%</button>
-          </div>
-          <a id="sheet-download" class="quiet-button sheet-download" download hidden>Download</a>
-        </div>
-
-        <div id="sheet-locked" class="sheet-locked">
-          <form id="sheet-unlock-form">
-            <label class="unlock-field">
-              <span>Passphrase</span>
-              <input id="sheet-pass" type="password" autocomplete="off" spellcheck="false" />
-            </label>
-            <button type="submit" class="quiet-button">Unlock sheets</button>
-          </form>
-          <p id="sheet-error" class="unlock-error" role="alert" hidden></p>
-        </div>
-
-        <div id="sheet-stage" class="sheet-stage" tabindex="0" role="img"
-             aria-label="Progression contact sheet, drag to pan and ctrl-scroll to zoom" hidden>
-          <div id="sheet-pane" class="sheet-pane"><img id="sheet-img" alt="" /></div>
-        </div>
-
-        <p id="sheet-status" class="panel-note sheet-status" aria-live="polite"></p>
-        <p id="sheet-caption" class="panel-note sheet-caption"></p>
-        <p class="panel-note sheet-help">
-          Drag to pan · double-click to zoom in and out · ctrl-scroll or the buttons to zoom ·
-          arrow keys to pan when focused.
-        </p>
-      </section>
-
       <section class="endmatter" aria-label="End matter">
         <div class="endmatter-row" id="acknowledgments">
           <div class="endmatter-title">
@@ -455,7 +411,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js" defer></script>
-    <script src="./sheets.js" defer></script>
+    <script src="./app.js?v=20260901-3" defer></script>
   </body>
 </html>
