@@ -26,6 +26,8 @@
   const progressNoun = document.querySelector("#progress-noun");
   const patchLegend = document.querySelector("#patch-legend");
   const fidelityLegendPosterior = document.querySelector("#fidelity-legend-posterior");
+  const restorationLegend = document.querySelector("#restoration-note").parentElement;
+  const restorationTitle = restorationLegend.title;
   const play = document.querySelector("#play");
   const speed = document.querySelector("#speed");
   const patchToggle = document.querySelector("#patch-toggle");
@@ -78,7 +80,7 @@
     { id: "monkey-o", label: "Monkey O", kind: "Macaque LGN" },
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
   ];
-  const DATA_VERSION = "20261125-1";
+  const DATA_VERSION = "20261125-2";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -259,13 +261,15 @@
     }
   }
 
-  // V1 scenes carry the ridge replay (decoded patches, 1/f, patch decoder,
-  // Langevin); LGN scenes carry the gaze and receptive-field timeline only.
+  // V1 scenes carry the per-fixation ridge replay (decoded patches, 1/f, patch
+  // decoder, Langevin); LGN scenes carry the gaze and receptive-field timeline
+  // and the paper's simple ridge (patch mosaic, 1/f) at the model checkpoints.
   function applyMode(scene) {
     const lgn = isLgn(scene);
     viewer.classList.toggle("is-lgn", lgn);
-    evidencePanel.hidden = lgn;
-    posteriorPanel.hidden = lgn;
+    evidencePanel.hidden = false;
+    posteriorPanel.hidden = false;
+    restorationLegend.title = lgn ? "" : restorationTitle;
     patchToggle.hidden = lgn;
     langevinToggle.hidden = lgn;
     if (lgn && !patchDrawer.hidden) setPatchDrawerVisible(false);
@@ -673,13 +677,12 @@
     context.restore();
   }
 
-  function drawModel(kind) {
-    const canvas = canvases[kind];
+  function drawModel(kind, canvas = canvases[kind]) {
     const context = clearCanvas(canvas);
     const progress = state.scene.paperProgress;
     if (!progress?.counts?.length || !state.images[`${kind}Prefix`]) {
       drawModelFrame(context, kind, Infinity, 1);
-      return;
+      return context;
     }
     const counts = progress.counts;
     const count = state.count;
@@ -696,6 +699,7 @@
       const fraction = kind === "diffusion" ? linear * linear * (3 - 2 * linear) : linear;
       if (fraction > 0) drawModelFrame(context, kind, index + 1, fraction);
     }
+    return context;
   }
 
   // Receptive field density -------------------------------------------------
@@ -826,10 +830,10 @@
     return (state.scene.pixelsPerDegree || 27.7) * (state.scene.tileDegrees || 1);
   }
 
-  function drawLgnTiles(context, current) {
+  function drawLgnTiles(context, current, degrees) {
     const scene = state.scene;
     const [x, y] = roundedPoint(scene.gaze, current);
-    const size = lgnTileSize();
+    const size = degrees ? scene.pixelsPerDegree * degrees : lgnTileSize();
     context.save();
     context.strokeStyle = colors.patch;
     context.lineWidth = 3;
@@ -1505,12 +1509,11 @@
   // opening a tool never squeezes or reorders the comparison. LGN has room for
   // the density map in the first row.
   function updatePanelColumns() {
-    const lgn = isLgn();
-    const core = lgn ? 3 : 5;
+    const core = 5;
     const optional = [densityPanel, langevinPanel, fidelityPanel].filter((panel) => !panel.hidden);
-    const firstRow = lgn && !densityPanel.hidden ? [densityPanel] : [];
-    const secondRow = optional.filter((panel) => !firstRow.includes(panel));
-    const span = 60 / (core + firstRow.length);
+    const firstRow = [];
+    const secondRow = optional;
+    const span = 60 / core;
     panelGrid.style.setProperty("--core-span", String(span));
     firstRow.forEach((panel) => {
       panel.style.gridColumn = `span ${span}`;
@@ -1646,6 +1649,13 @@
         drawSprite(canvases.posterior, state.images.posterior, frameIndex);
       }
       if (current >= 0) drawPatchWindow(evidenceContext, current);
+    } else if (state.images.mosaic) {
+      const mosaicContext = drawModel("mosaic", canvases.evidence);
+      drawModel("ridge", canvases.posterior);
+      if (current >= 0) drawLgnTiles(mosaicContext, current, state.scene.ridgePatchDegrees);
+    } else {
+      clearCanvas(canvases.evidence);
+      clearCanvas(canvases.posterior);
     }
     drawModel("transformer");
     drawModel("diffusion");
@@ -1874,8 +1884,10 @@
       const names = isLgn(scene)
         ? ["original", "transformer", "diffusion"]
         : ["original", "evidence", "posterior", "transformer", "diffusion"];
-      if (paths.transformerPrefix) names.push("transformerPrefix");
-      if (paths.diffusionPrefix) names.push("diffusionPrefix");
+      const extras = isLgn(scene)
+        ? ["mosaic", "ridge", "transformerPrefix", "diffusionPrefix", "mosaicPrefix", "ridgePrefix"]
+        : ["transformerPrefix", "diffusionPrefix"];
+      for (const name of extras) if (paths[name]) names.push(name);
       const loaded = await Promise.all(names.map((name) => loadImage(paths[name])));
       if (token !== state.loadToken) return;
       state.scene = scene;

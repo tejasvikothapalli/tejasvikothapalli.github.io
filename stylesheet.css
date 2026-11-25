@@ -255,3 +255,108 @@ span.highlight {
 .decode-playing .decode-progress {
   opacity: 1;
 }
+
+/* Phones: the photo sits beside the name and subtitle, the introduction runs the full width below them,
+   and every research, coursework and teaching item puts its picture above its text. */
+@media (max-width: 640px) {
+  table.intro > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 36%;
+    column-gap: 14px;
+    align-items: center;
+    padding: 12px 10px 0;
+  }
+
+  table.intro td.intro-text {
+    display: contents;
+  }
+
+  table.intro td.intro-text > * {
+    grid-column: 1 / -1;
+  }
+
+  table.intro td.intro-text > .intro-name {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    text-align: left !important;
+  }
+
+  table.intro name {
+    font-size: 28px;
+    line-height: 1.15;
+  }
+
+  table.intro td.intro-photo {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  table.intro td.intro-photo img {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto;
+  }
+
+  table.items > tbody > tr > td {
+    display: block;
+    width: auto !important;
+    padding: 6px 10px !important;
+  }
+
+  table.items > tbody > tr > td:first-child {
+    padding-top: 22px !important;
+  }
+
+  table.items > tbody > tr > td:first-child > .one,
+  table.items > tbody > tr > td:first-child > a {
+    display: block;
+    margin: 0 auto;
+  }
+
+  table.items > tbody > tr > td:first-child > a {
+    width: max-content;
+  }
+
+  table.items > tbody > tr > td:first-child img {
+    max-width: 100%;
+  }
+
+  /* the pictures' boxes take their still image's height, so a tall picture never runs into the text below */
+  table.items .one {
+    height: auto;
+  }
+
+  table.items .one > img {
+    max-width: 100%;
+    height: auto;
+    max-height: 200px;
+    object-fit: contain;
+  }
+
+  table.items .decode-thumb {
+    flex-direction: row;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  table.items .decode-panel {
+    flex: 1 1 0;
+    width: auto;
+    height: auto;
+    aspect-ratio: 16 / 9;
+  }
+
+  table.items ul {
+    padding-left: 20px;
+  }
+
+  /* section headings line up with the items' text */
+  td:has(> heading) {
+    padding: 22px 10px 2px !important;
+  }
+}
