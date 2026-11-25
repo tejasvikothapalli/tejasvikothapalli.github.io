@@ -33,6 +33,10 @@
   const patchToggle = document.querySelector("#patch-toggle");
   const patchDrawer = document.querySelector("#patch-drawer");
   const patchFixation = document.querySelector("#patch-fixation");
+  const decoderOutput = document.querySelector("#decoder-output");
+  const decoderBox = document.querySelector(".network-box");
+  const rasterAxisStart = document.querySelector("#raster-axis-start");
+  const rasterAxisLabel = document.querySelector("#raster-axis-label");
   const rasterCells = document.querySelector("#raster-cells");
   const rasterDuration = document.querySelector("#raster-duration");
   const replayVideo = document.querySelector("#replay-video");
@@ -80,7 +84,7 @@
     { id: "monkey-o", label: "Monkey O", kind: "Macaque LGN" },
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
   ];
-  const DATA_VERSION = "20261125-2";
+  const DATA_VERSION = "20261125-5";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -90,6 +94,7 @@
     images: null,
     assetPaths: null,
     patchPromise: null,
+    rfMeta: null,
     replayAbort: null,
     replayObjectUrl: null,
     videoReady: false,
@@ -182,6 +187,68 @@
 
   // Patch size and screen extent differ per animal and per decoder arm, so the
   // degree labels come from the scene metadata rather than the markup.
+  // Every spatial panel draws in the 1280 x 720 display coordinates of the
+  // scene, through the scene's view crop: the largest 4:3 rectangle inside the
+  // display hull (scene.viewCrop), so the panels show large images rather than
+  // hull shapes on a dark plate.
+  const FULL_W = 1280;
+  const FULL_H = 720;
+
+  function viewCanvases() {
+    return [
+      canvases.truth,
+      canvases.evidence,
+      canvases.posterior,
+      canvases.transformer,
+      canvases.diffusion,
+      canvases.density,
+      canvases.langevin,
+    ];
+  }
+
+  function applyView(scene) {
+    const crop =
+      Array.isArray(scene.viewCrop) && scene.viewCrop.length === 4
+        ? scene.viewCrop.map(Number)
+        : [0, 0, FULL_W, FULL_H];
+    const [x0, y0, x1, y1] = crop;
+    state.view = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    viewer.style.setProperty("--view-aspect", `${state.view.w} / ${state.view.h}`);
+    // The fidelity plot shares the panels' shape; its layout space keeps a 1280 width.
+    FIDELITY_VIEW.height = Math.round((FIDELITY_VIEW.width * state.view.h) / state.view.w);
+    for (const canvas of viewCanvases()) {
+      if (canvas.width !== state.view.w) canvas.width = state.view.w;
+      if (canvas.height !== state.view.h) canvas.height = state.view.h;
+      canvas.getContext("2d").setTransform(1, 0, 0, 1, -x0, -y0);
+    }
+    // The hull lies outside the crop, so its legend entries go.
+    document.querySelectorAll(".legend-hull").forEach((node) => {
+      node.parentElement.hidden = Boolean(scene.viewCrop);
+    });
+    const ppd = Number(scene.pixelsPerDegree);
+    if (Number.isFinite(ppd) && ppd > 0) {
+      const width = state.view.w / ppd;
+      const height = state.view.h / ppd;
+      const x = document.querySelector(".screen-degrees-x");
+      const y = document.querySelector(".screen-degrees-y");
+      if (x) x.textContent = `${width.toFixed(1)}°`;
+      if (y) y.textContent = `${height.toFixed(1)}°`;
+      document
+        .querySelector("#screen-scale")
+        ?.setAttribute("aria-label", `View ${width.toFixed(1)} by ${height.toFixed(1)} degrees`);
+    }
+  }
+
+  // Map a pointer event on a view canvas to display coordinates.
+  function viewPoint(canvas, event) {
+    const bounds = canvas.getBoundingClientRect();
+    const view = state.view ?? { x: 0, y: 0, w: FULL_W, h: FULL_H };
+    return [
+      view.x + ((event.clientX - bounds.left) / bounds.width) * view.w,
+      view.y + ((event.clientY - bounds.top) / bounds.height) * view.h,
+    ];
+  }
+
   function applySceneGeometry(scene) {
     const patch = Number(scene.patchDegrees);
     if (Number.isFinite(patch)) {
@@ -248,7 +315,9 @@
     if (!hasFidelity && !fidelityPanel.hidden) setFidelityVisible(false);
     fidelityToggle.disabled = false;
 
-    const hasPatchDecoder = Boolean(scene.assets?.truthPatches && scene.assets?.trialRasters);
+    const hasPatchDecoder = isLgn(scene)
+      ? Boolean(scene.assets?.rfPatches && scene.assets?.rfPatchSprite && scene.assets?.rfRasters)
+      : Boolean(scene.assets?.truthPatches && scene.assets?.trialRasters);
     patchPending.hidden = hasPatchDecoder;
     if (!hasPatchDecoder) patchPending.replaceChildren(...pendingMessage("Patch decoder"));
 
@@ -270,11 +339,30 @@
     evidencePanel.hidden = false;
     posteriorPanel.hidden = false;
     restorationLegend.title = lgn ? "" : restorationTitle;
-    patchToggle.hidden = lgn;
+    patchToggle.hidden = lgn && !scene.assets?.rfPatches;
     langevinToggle.hidden = lgn;
-    if (lgn && !patchDrawer.hidden) setPatchDrawerVisible(false);
+    if (patchToggle.hidden && !patchDrawer.hidden) setPatchDrawerVisible(false);
     if (lgn && !langevinPanel.hidden) setLangevinVisible(false);
-    clickHint.hidden = lgn;
+    clickHint.hidden = patchToggle.hidden;
+    clickHint.textContent = lgn
+      ? "Click a receptive field in the original scene to inspect the patch the ridge decodes from its spikes."
+      : "Click a point in the original scene to inspect the separate local patch decoder.";
+    const windowMs = lgn ? 100 : Number(scene.windowMilliseconds);
+    if (Number.isFinite(windowMs)) {
+      document.querySelector("#decoder-input").textContent = `${Math.round(windowMs)} ms neural activity`;
+      decoderBox.setAttribute(
+        "aria-label",
+        `Ridge regression: input ${Math.round(windowMs)} milliseconds of neural activity; output ${lgn ? "receptive-field" : "gaze-contingent"} patch`,
+      );
+    }
+    decoderOutput.textContent = lgn ? "Receptive-field patch" : "Gaze-contingent patch";
+    rasterAxisStart.textContent = "0 s";
+    rasterAxisLabel.textContent = lgn ? "Presentation time" : "Trial time";
+    if (lgn) {
+      document.querySelectorAll(".patch-degrees").forEach((node) => {
+        node.textContent = `${Number(scene.ridgePatchDegrees || 0.75).toFixed(2)}°`;
+      });
+    }
     stepNoun.textContent = lgn ? "time" : "fixations";
     progressNoun.textContent = lgn ? "Window" : "Fixation";
     progressNoun.parentElement.title = lgn ? "One 100-ms window of neural activity every 200 ms of viewing" : "";
@@ -428,6 +516,34 @@
     return bestCovering >= 0 ? bestCovering : nearest;
   }
 
+  // LGN: every replay step has one decoded patch (rf-patches.json). A click
+  // picks, among the steps' patches covering the point, the one decoded best
+  // (lowest error), else the nearest, and the replay jumps to that step.
+  function bestRfPatchAtPoint(x, y) {
+    const meta = state.rfMeta;
+    if (!meta) return -1;
+    const half = meta.sidePixels / 2;
+    let best = -1;
+    let bestError = Infinity;
+    let nearest = -1;
+    let nearestDistance = Infinity;
+    for (let step = 0; step < meta.steps; step += 1) {
+      if (meta.patch[step] < 0) continue;
+      const dx = meta.x[step] / 10 - x;
+      const dy = meta.y[step] / 10 - y;
+      const distance = dx * dx + dy * dy;
+      if (distance < nearestDistance) {
+        nearest = step;
+        nearestDistance = distance;
+      }
+      if (Math.abs(dx) <= half && Math.abs(dy) <= half && meta.error[step] < bestError) {
+        best = step;
+        bestError = meta.error[step];
+      }
+    }
+    return best >= 0 ? best : nearest;
+  }
+
   function hideSceneMagnifier() {
     sceneMagnifier.hidden = true;
   }
@@ -436,7 +552,7 @@
     if (
       event.pointerType === "touch" ||
       !state.scene ||
-      isLgn() ||
+      (isLgn() && !state.scene.assets?.rfPatches) ||
       !state.images?.original ||
       viewer.getAttribute("aria-busy") === "true"
     ) {
@@ -447,12 +563,13 @@
     const canvas = canvases.truth;
     const bounds = canvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
-    const canvasX = ((event.clientX - bounds.left) / bounds.width) * canvas.width;
-    const canvasY = ((event.clientY - bounds.top) / bounds.height) * canvas.height;
+    const [canvasX, canvasY] = viewPoint(canvas, event);
     const image = state.images.original;
-    const sourceScaleX = image.naturalWidth / canvas.width;
-    const sourceScaleY = image.naturalHeight / canvas.height;
-    const patchSide = state.scene.patchSelection?.typicalSidePixels ?? 21;
+    const sourceScaleX = image.naturalWidth / FULL_W;
+    const sourceScaleY = image.naturalHeight / FULL_H;
+    const patchSide = isLgn()
+      ? (state.scene.pixelsPerDegree || 27.7) * (state.scene.ridgePatchDegrees || 0.75)
+      : state.scene.patchSelection?.typicalSidePixels ?? 21;
     const sourceWidth = patchSide * sourceScaleX;
     const sourceHeight = patchSide * sourceScaleY;
     const sourceLeft = canvasX * sourceScaleX - sourceWidth / 2;
@@ -559,7 +676,7 @@
   function drawTruth(current) {
     const scene = state.scene;
     const context = clearCanvas(canvases.truth);
-    context.drawImage(state.images.original, 0, 0, canvases.truth.width, canvases.truth.height);
+    context.drawImage(state.images.original, 0, 0, FULL_W, FULL_H);
     drawHull(context, scene.hull);
     if (current < 0) return;
 
@@ -582,9 +699,29 @@
     }
 
     const [x, y] = roundedPoint(scene.gaze, current);
-    if (isLgn(scene)) drawLgnTiles(context, current);
-    else drawPatchWindow(context, current);
+    if (isLgn(scene)) {
+      drawLgnTiles(context, current);
+      drawSelectedRf(context, current);
+    } else {
+      drawPatchWindow(context, current);
+    }
     drawGaze(context, x, y);
+  }
+
+  function drawSelectedRf(context, current) {
+    const meta = state.rfMeta;
+    if (!meta || patchDrawer.hidden || current < 0 || meta.patch[current] < 0) return;
+    const side = meta.sidePixels;
+    const x = meta.x[current] / 10 - side / 2;
+    const y = meta.y[current] / 10 - side / 2;
+    context.save();
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 7;
+    context.strokeRect(x, y, side, side);
+    context.strokeStyle = colors.gaze;
+    context.lineWidth = 3.5;
+    context.strokeRect(x, y, side, side);
+    context.restore();
   }
 
   function frameIndexForCount(count) {
@@ -612,8 +749,8 @@
       scene.frameHeight,
       0,
       0,
-      canvas.width,
-      canvas.height,
+      FULL_W,
+      FULL_H,
     );
     return context;
   }
@@ -626,7 +763,7 @@
     }
     context.clip();
     context.globalAlpha = alpha;
-    context.drawImage(image, 0, 0, context.canvas.width, context.canvas.height);
+    context.drawImage(image, 0, 0, FULL_W, FULL_H);
     context.restore();
   }
 
@@ -657,7 +794,7 @@
       context.fillStyle = "#808080";
       context.fill();
     } else if (!progress || frameIndex >= progress.counts.length - 1) {
-      context.drawImage(state.images[kind], 0, 0, context.canvas.width, context.canvas.height);
+      context.drawImage(state.images[kind], 0, 0, FULL_W, FULL_H);
     } else {
       const sprite = state.images[`${kind}Prefix`];
       const sourceX = (frameIndex % progress.spriteColumns) * progress.frameWidth;
@@ -670,8 +807,8 @@
         progress.frameHeight,
         0,
         0,
-        context.canvas.width,
-        context.canvas.height,
+        FULL_W,
+        FULL_H,
       );
     }
     context.restore();
@@ -816,7 +953,7 @@
     if (traceHull(context, scene.hull)) context.clip();
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
-    context.drawImage(rf.canvas, 0, 0, canvases.density.width, canvases.density.height);
+    context.drawImage(rf.canvas, 0, 0, FULL_W, FULL_H);
     context.restore();
     if (current >= 0) {
       if (isLgn()) drawLgnTiles(context, current);
@@ -853,8 +990,8 @@
       state.scene.frameHeight,
       0,
       0,
-      canvas.width,
-      canvas.height,
+      FULL_W,
+      FULL_H,
     );
     return context;
   }
@@ -1307,8 +1444,8 @@
     canvas.width = LANGEVIN_WIDTH;
     canvas.height = LANGEVIN_HEIGHT;
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    const scaleX = LANGEVIN_WIDTH / canvases.posterior.width;
-    const scaleY = LANGEVIN_HEIGHT / canvases.posterior.height;
+    const scaleX = LANGEVIN_WIDTH / FULL_W;
+    const scaleY = LANGEVIN_HEIGHT / FULL_H;
     context.beginPath();
     context.moveTo((scene.hull[0] / 10) * scaleX, (scene.hull[1] / 10) * scaleY);
     for (let index = 2; index < scene.hull.length; index += 2) {
@@ -1386,7 +1523,7 @@
       0,
     );
     const target = clearCanvas(canvases.langevin);
-    target.drawImage(langevin.canvas, 0, 0, canvases.langevin.width, canvases.langevin.height);
+    target.drawImage(langevin.canvas, 0, 0, FULL_W, FULL_H);
     drawHull(target, state.scene.hull);
     langevinIterations.textContent = `${message.iteration.toLocaleString()} steps`;
     langevinDeviation.textContent = `${message.deviation.toFixed(1)} / 255`;
@@ -1525,7 +1662,100 @@
     panelGrid.dataset.columns = String(core + optional.length);
   }
 
+  function drawRfRaster(current) {
+    const canvas = canvases.raster;
+    const context = clearCanvas(canvas, "#f8fafc");
+    const meta = state.rfMeta;
+    const atlas = state.images?.rfRasters;
+    const presentation = current >= 0 ? state.scene.presentation[current] : -1;
+    const record = meta?.presentations?.[presentation];
+    if (!atlas || !record) {
+      rasterCells.textContent = "— cells";
+      rasterDuration.textContent = "—";
+      return;
+    }
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+      atlas,
+      (presentation % meta.rasterColumns) * meta.rasterWidth,
+      Math.floor(presentation / meta.rasterColumns) * meta.rasterHeight,
+      meta.rasterWidth,
+      meta.rasterHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
+    const x0 = (meta.window[current * 2] / record.bins) * canvas.width;
+    const x1 = (meta.window[current * 2 + 1] / record.bins) * canvas.width;
+    context.fillStyle = "rgba(37, 99, 235, 0.14)";
+    context.fillRect(x0, 0, Math.max(2, x1 - x0), canvas.height);
+    context.strokeStyle = "#2563eb";
+    context.lineWidth = 3;
+    context.strokeRect(x0, 1.5, Math.max(2, x1 - x0), canvas.height - 3);
+    rasterCells.textContent = `${record.cells.toLocaleString()} cells`;
+    rasterDuration.textContent = `${((record.bins * meta.binMilliseconds) / 1000).toFixed(1)} s`;
+  }
+
+  function drawRfPatch(current) {
+    const truthCanvas = canvases.groundTruthPatch;
+    const truthContext = clearCanvas(truthCanvas, "#808080");
+    const decodedCanvas = canvases.patch;
+    const decodedContext = clearCanvas(decodedCanvas, "#808080");
+    truthContext.imageSmoothingEnabled = false;
+    decodedContext.imageSmoothingEnabled = false;
+    const meta = state.rfMeta;
+    if (!meta || !state.images?.rfPatchSprite || !state.images?.rfRasters) {
+      drawRfRaster(-1);
+      patchFixation.textContent = "Loading patches…";
+      return;
+    }
+    drawRfRaster(current);
+    if (current < 0) {
+      patchFixation.textContent = "Play or click a receptive field";
+      return;
+    }
+    const index = meta.patch[current];
+    if (index < 0) {
+      patchFixation.textContent = `Window ${(current + 1).toLocaleString()} · the ridge has no decoder for this session`;
+      return;
+    }
+    const size = meta.patchSize;
+    decodedContext.drawImage(
+      state.images.rfPatchSprite,
+      (index % meta.patchColumns) * size,
+      Math.floor(index / meta.patchColumns) * size,
+      size,
+      size,
+      0,
+      0,
+      decodedCanvas.width,
+      decodedCanvas.height,
+    );
+    const side = meta.sidePixels;
+    const scaleX = state.images.original.naturalWidth / FULL_W;
+    const scaleY = state.images.original.naturalHeight / FULL_H;
+    truthContext.drawImage(
+      state.images.original,
+      (meta.x[current] / 10 - side / 2) * scaleX,
+      (meta.y[current] / 10 - side / 2) * scaleY,
+      side * scaleX,
+      side * scaleY,
+      0,
+      0,
+      truthCanvas.width,
+      truthCanvas.height,
+    );
+    patchFixation.textContent =
+      `Window ${(current + 1).toLocaleString()} · receptive field with the most spikes: ` +
+      `${meta.spikes[current].toLocaleString()} spikes from ${meta.cells[current].toLocaleString()} cells (outlined in the scene)`;
+  }
+
   function drawPatch(current) {
+    if (isLgn()) {
+      drawRfPatch(current);
+      return;
+    }
     drawRaster(current);
     const truthCanvas = canvases.groundTruthPatch;
     const truthContext = clearCanvas(truthCanvas, "#808080");
@@ -1556,8 +1786,8 @@
       );
     } else {
       const [x0, y0, x1, y1] = patchBox(state.scene.patchBox, current);
-      const scaleX = state.images.original.naturalWidth / canvases.truth.width;
-      const scaleY = state.images.original.naturalHeight / canvases.truth.height;
+      const scaleX = state.images.original.naturalWidth / FULL_W;
+      const scaleY = state.images.original.naturalHeight / FULL_H;
       truthContext.drawImage(
         state.images.original,
         x0 * scaleX,
@@ -1589,7 +1819,42 @@
     patchFixation.textContent = `Fixation ID ${state.scene.fixation[current].toLocaleString()}`;
   }
 
+  function ensureRfPatches() {
+    if (!state.images || !state.assetPaths?.rfPatches) return Promise.resolve();
+    if (state.rfMeta && state.images.rfPatchSprite && state.images.rfRasters) {
+      drawRfPatch(state.count - 1);
+      return Promise.resolve();
+    }
+    if (state.patchPromise) return state.patchPromise;
+    const token = state.loadToken;
+    patchFixation.textContent = "Loading patches…";
+    state.patchPromise = Promise.all([
+      fetch(`${state.assetPaths.rfPatches}?v=${DATA_VERSION}`).then((response) => {
+        if (!response.ok) throw new Error(`Patch metadata returned ${response.status}`);
+        return response.json();
+      }),
+      loadImage(state.assetPaths.rfPatchSprite),
+      loadImage(state.assetPaths.rfRasters),
+    ])
+      .then(([meta, sprite, rasters]) => {
+        if (token !== state.loadToken || !state.images) return;
+        state.rfMeta = meta;
+        state.images.rfPatchSprite = sprite;
+        state.images.rfRasters = rasters;
+        paint();
+      })
+      .catch((error) => {
+        console.error(error);
+        if (token === state.loadToken) patchFixation.textContent = "Patch unavailable";
+      })
+      .finally(() => {
+        if (token === state.loadToken) state.patchPromise = null;
+      });
+    return state.patchPromise;
+  }
+
   function ensurePatchImage() {
+    if (isLgn()) return ensureRfPatches();
     if (!state.images || !state.assetPaths) return Promise.resolve();
     const names = ["patches"];
     if (state.assetPaths.truthPatches) names.push("truthPatches");
@@ -1623,6 +1888,8 @@
     patchDrawer.hidden = !show;
     patchToggle.setAttribute("aria-pressed", String(show));
     patchToggle.textContent = show ? "Hide patch decoder" : "Show patch decoder";
+    // LGN outlines the decoded receptive field in the scene while the drawer is open.
+    if (isLgn() && state.images) paint();
     if (!show) return;
     drawPatch(state.count - 1);
     ensurePatchImage();
@@ -1678,7 +1945,7 @@
       sessionCells.textContent = "— cells";
     }
 
-    if (!lgn && !patchDrawer.hidden) drawPatch(current);
+    if (!patchDrawer.hidden) drawPatch(current);
     if (!lgn && !langevinPanel.hidden) syncLangevin();
     drawFidelity();
     timeline.value = String(state.count);
@@ -1896,7 +2163,9 @@
       state.images = Object.fromEntries(names.map((name, index) => [name, loaded[index]]));
       state.assetPaths = paths;
       state.patchPromise = null;
+      state.rfMeta = null;
       applySceneGeometry(scene);
+      applyView(scene);
       applyRebuildState(scene);
       applyMode(scene);
       const minutes = scene.recordingSeconds / 60;
@@ -2030,9 +2299,18 @@
   canvases.truth.addEventListener("click", async (event) => {
     if (!state.scene || viewer.getAttribute("aria-busy") === "true") return;
     const selectedScene = state.scene;
-    const bounds = canvases.truth.getBoundingClientRect();
-    const x = ((event.clientX - bounds.left) / bounds.width) * canvases.truth.width;
-    const y = ((event.clientY - bounds.top) / bounds.height) * canvases.truth.height;
+    const [x, y] = viewPoint(canvases.truth, event);
+    if (isLgn(selectedScene)) {
+      if (!selectedScene.assets?.rfPatches) return;
+      setPlaying(false);
+      await ensureRfPatches();
+      if (state.scene !== selectedScene) return;
+      const step = bestRfPatchAtPoint(x, y);
+      if (step < 0) return;
+      await setCount(step + 1);
+      setPatchDrawerVisible(true, { scroll: true });
+      return;
+    }
     const fixation = bestPatchAtPoint(x, y);
     if (fixation < 0) return;
 

@@ -10,7 +10,7 @@
     />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
-    <link rel="stylesheet" href="./style.css?v=20261125-1" />
+    <link rel="stylesheet" href="./style.css?v=20261125-3" />
   </head>
   <body>
     <header class="topbar">
@@ -332,14 +332,14 @@
                   <i></i><b id="raster-cells">— cells</b>
                 </span>
                 <canvas id="raster-canvas" width="640" height="200"></canvas>
-                <span class="raster-axis"><i>0 s</i><i>Trial time</i><i id="raster-duration">—</i></span>
+                <span class="raster-axis"><i id="raster-axis-start">0 s</i><i id="raster-axis-label">Trial time</i><i id="raster-duration">—</i></span>
               </div>
             </figure>
             <span class="flow-arrow" aria-hidden="true">→</span>
             <div class="network-box" aria-label="Ridge regression: input 75 milliseconds of neural activity; output gaze-contingent patch">
               <strong>Ridge regression</strong>
               <span><small>Input</small><span id="decoder-input">75 ms neural activity</span></span>
-              <span><small>Output</small>Gaze-contingent patch</span>
+              <span><small>Output</small><span id="decoder-output">Gaze-contingent patch</span></span>
             </div>
             <span class="flow-arrow" aria-hidden="true">→</span>
             <figure class="patch-figure">
@@ -416,8 +416,10 @@
           </div>
           <div class="endmatter-body">
             <p>
-              TK thanks the faculty and TAs at the Cold Spring Harbor Computational Neuroscience:
-              Vision 2026 Summer Course and the MIT Brains, Minds and Machines 2026 Summer Course.
+              TK thanks the faculty and TAs at the
+              <a href="https://meetings.cshl.edu/courses.aspx?course=C-visi&amp;year=26">Cold Spring Harbor Computational
+              Neuroscience: Vision 2026 Summer Course</a> and the
+              <a href="https://bmm.mit.edu/">MIT Brains, Minds and Machines 2026 Summer Course</a>.
               Conversations with Eero Simoncelli, E.J. Chichilnisky, Jim DiCarlo, Gabriel Kreiman,
               Jack Gallant, and Michael Silver were particularly helpful. TK would also like to thank
               Ashwin Nathan for access to OpenAI&rsquo;s Codex and Andi Gu for helpful conversations
@@ -433,6 +435,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20261125-2" defer></script>
+    <script src="./app.js?v=20261125-5" defer></script>
   </body>
 </html>
