@@ -6,7 +6,7 @@
   <meta name="author" content="Tejasvi Kothapalli">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <link rel="stylesheet" type="text/css" href="stylesheet.css">
+  <link rel="stylesheet" type="text/css" href="stylesheet.css?v=20261124b">
 	<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚣🏾</text></svg>">
   <style>
       body {
@@ -43,7 +43,7 @@
                 I was previously a student research assistant jointly at <a href = "https://optometry.berkeley.edu/research/clinical-research-center/crc-contacts/">UC Berkeley's Clinical Research Center (CRC)</a> and 
                 the <a href = 'https://www.icsi.berkeley.edu/icsi/groups/vision/members'>International Computer Science Institute (ICSI)</a>. 
                 There I worked with <a href = "https://vcresearch.berkeley.edu/faculty/meng-c-lin">Prof. Meng Lin</a>, <a href = "https://www1.icsi.berkeley.edu/~stellayu/">Prof. Stella Yu</a>,
-                and <a href = "http://pwang.pw">Dr. Peter Wang</a>.
+                and <a href = "http://pwang.pw">Prof. Peter Wang</a>.
                
               </p> -->
 
@@ -52,7 +52,7 @@
                 a student research assistant jointly at the <a href = "https://optometry.berkeley.edu/research/clinical-research-center/crc-contacts/">Clinical Research Center (CRC)</a>, 
                 <a href = 'https://www.icsi.berkeley.edu/icsi/groups/vision/members'>International Computer Science Institute (ICSI)</a>, and <a href = 'https://bair.berkeley.edu/'>Berkeley Artificial Intelligence Research (BAIR)</a>.
                 There, I had the pleasure of working with <a href = "https://vcresearch.berkeley.edu/faculty/meng-c-lin">Prof. Meng Lin</a>, <a href = "https://www1.icsi.berkeley.edu/~stellayu/">Prof. Stella Yu</a>,
-                and <a href = "http://pwang.pw">Dr. Peter Wang</a>. I built a computational imaging <a href = "https://easytear-dev.github.io/">technique</a> to track the spread of the tear film on the ocular surface.
+                and <a href = "http://pwang.pw">Prof. Peter Wang</a>. I built a computational imaging <a href = "https://easytear-dev.github.io/">technique</a> to track the spread of the tear film on the ocular surface.
                 <!-- My research focused on applying computer vision and machine learning techniques to diagnose Dry Eye Disease. -->
               </p>
               <!-- <script type="text/javascript">
@@ -134,14 +134,24 @@
             <!-- <sectionheading>&nbsp;&nbsp;News</sectionheading>
              -->
              <heading>News</heading>
-            <ul>
+            <ul class="news-list">
+              <li> [11/2026] Posted <a href = 'https://arxiv.org/abs/2611.31989'>preprint</a> on <b>brain decoding during natural vision</b></li><br>
+              <li> [10/2026] Posted <a href = 'https://doi.org/10.64898/2026.10.12.758571'>preprint</a> on <b>active sensing in primary visual cortex</b></li><br>
+              <li> [8/2026] Awarded <b>NIH training grant</b> (NEI T32)</li><br>
               <li> [8/2026] Attended <b>MIT Brains, Minds, & Machines</b> <a href = 'https://bmm.mit.edu/'> Summer Course</a></li><br>
               <li> [7/2026] Attended <b>CSHL Computational Neuroscience: Vision</b> <a href = 'https://meetings.cshl.edu/courses.aspx?course=C-visi&year=26'> Summer Course</a></li><br>
               <li> [11/2025] Presented <a href = 'data/kothapalli_sfn_2025_final.pdf'>poster</a> at <b>Society for Neuroscience (SfN)</b></li><br>
               <li> [Fall 2025] Served as <b>GSI for Neuroscience 172L: Cognitive and Computational Lab</b>, Instructors: <a href = 'https://redwood.berkeley.edu/people/bruno-olshausen/'>Bruno Olshausen</a>,
                 <a href="https://theunissen.berkeley.edu/">Frederic Theunissen</a>, 
-                <a href="https://argentum.ucbso.berkeley.edu/">Michael Silver</a></li><br>
-
+                <a href="https://argentum.ucbso.berkeley.edu/">Michael Silver</a></li>
+            </ul>
+            <div class="news-more">
+              <button type="button" id="news-toggle" class="news-toggle" aria-controls="news-older" aria-expanded="false">
+                <span class="news-toggle-label">Show more</span>
+                <svg class="news-toggle-chevron" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <ul id="news-older" class="news-list" hidden>
               <li> [05/2025] <b>Passed Qualification Exam!</b> Committee: <a href = 'https://redwood.berkeley.edu/people/bruno-olshausen/'>Bruno Olshausen</a>, 
                 <a href="https://gallantlab.org/">Jack Gallant</a>, 
                 <a href="https://bri.ucla.edu/people/alex-huk-ph-d/">Alex Huk</a>, 
@@ -150,8 +160,15 @@
               <li> [08/2023] Named <b>CIVO Fellow</b> by the UC Berkeley Center for Innovation in Vision and Optics</li><br>
               <li> [10/2022] Paper accepted at <b>NeurIPS 2022, Medical Imaging Workshop</b></li><br>
               <li> [05/2022] Received <b>UC Berkeley EECS B.S.</b> degree</li>
-
             </ul>
+            <script type="text/javascript">
+              document.getElementById('news-toggle').addEventListener('click', function () {
+                var older = document.getElementById('news-older');
+                older.hidden = !older.hidden;
+                this.setAttribute('aria-expanded', String(!older.hidden));
+                this.querySelector('.news-toggle-label').textContent = older.hidden ? 'Show more' : 'Show less';
+              });
+            </script>
           </td></tr>
         </tbody></table>
         <table style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;"><tbody>
@@ -163,6 +180,79 @@
           </tr>
         </tbody></table>
         <table style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;"><tbody>
+
+          <tr id="decoding">
+            <td style="padding:20px;width:25%;vertical-align:middle">
+              <div class="decode-thumb">
+                <figure class="decode-panel">
+                  <img src="images/decoding_viewed.jpg" alt="Photograph the monkey viewed" width="160" height="90">
+                  <figcaption>Viewed</figcaption>
+                </figure>
+                <figure class="decode-panel">
+                  <img src="images/decoding_decoded.jpg" alt="Image decoded from brain activity" width="160" height="90">
+                  <div class="decode-frames" id="decoding_frames"></div>
+                  <div class="decode-progress" id="decoding_progress"></div>
+                  <figcaption>Decoded</figcaption>
+                </figure>
+              </div>
+              <script type="text/javascript">
+                (function () {
+                  // On hover, replay the decoder's reconstruction as fixations accumulate (27 frames), then hold the final image.
+                  var row = document.getElementById('decoding');
+                  var frames = document.getElementById('decoding_frames');
+                  var bar = document.getElementById('decoding_progress');
+                  var N = 27, STEP = 110, HOLD = 1500, i = 0, timer = null;
+                  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                  function tick() {
+                    if (i === N) i = 0;
+                    frames.style.backgroundPosition = '0 ' + (100 * i / (N - 1)) + '%';
+                    bar.style.transform = 'scaleX(' + ((i + 1) / N) + ')';
+                    i += 1;
+                    timer = setTimeout(tick, i === N ? HOLD : STEP);
+                  }
+                  row.addEventListener('mouseenter', function () {
+                    if (still || timer) return;
+                    i = 0;
+                    row.classList.add('decode-playing');
+                    tick();
+                  });
+                  row.addEventListener('mouseleave', function () {
+                    clearTimeout(timer);
+                    timer = null;
+                    row.classList.remove('decode-playing');
+                  });
+                })();
+              </script>
+            </td>
+            <td style="padding:20px;width:75%;vertical-align:middle">
+              <a href="https://arxiv.org/abs/2611.31989">
+                <papertitle>Brain Decoding During Natural Vision</papertitle>
+              </a>
+              <br>
+
+              <ul>
+                <li>
+                  <a href="https://arxiv.org/abs/2611.31989">Reconstructing Natural Images from Brain Activity during Natural Vision</a><br>
+                  <strong>Tejasvi Kothapalli</strong>*,
+                  <a href = 'https://github.com/ryan-ressmeyer'>Ryan Ressmeyer</a>*,
+                  <a href="https://decrow3.github.io/">Declan Rowley</a>*,
+                  <a href=""style="pointer-events: none;">Gregory D. Horwitz</a>,
+                  <a href="https://www.sas.rochester.edu/bcs/people/faculty/mitchell_jude/index.html">Jude Mitchell</a>,
+                  <a href="https://bri.ucla.edu/people/alex-huk-ph-d/">Alexander C. Huk</a>,
+                  <a href="https://redwood.berkeley.edu/people/bruno-olshausen/">Bruno Olshausen</a>,
+                  <a href="https://jake.vision/">Jacob Yates</a>
+                  <br>
+                  <em>arXiv</em>, 2026<br>
+                  <a href="https://arxiv.org/abs/2611.31989">paper</a> /
+                  <a href="blogs/freeview-decoding/">blog post</a>
+
+                </li>
+              </ul>
+
+              <p></p>
+              <p>We reconstruct the natural scenes that monkeys freely view from LGN and V1 activity, combining evidence across eye movements, trials, and sessions.</p>
+            </td>
+          </tr>
 
           <tr id = "fixrsvp" onmouseout="fixrsvp_stop()" onmouseover="fixrsvp_start()">
             <td style="padding:20px;width:25%;vertical-align:middle">
@@ -189,6 +279,39 @@
 
               <ul>
                 <li>
+                  <a href="https://doi.org/10.64898/2026.10.12.758571">Active sensing explains cortical variability and improves visual information</a><br>
+                  <a href = 'https://github.com/ryan-ressmeyer'>Ryan Ressmeyer</a>*,
+                  <a href="https://decrow3.github.io/">Declan Rowley</a>*,
+                  <strong>Tejasvi Kothapalli</strong>*,
+                  <a href=""style="pointer-events: none;">Dekel Galor</a>,
+                  <a href=""style="pointer-events: none;">Ruei-Jr Wu</a>,
+                  <a href=""style="pointer-events: none;">Michele Rucci</a>,
+                  <a href="https://www.sas.rochester.edu/bcs/people/faculty/mitchell_jude/index.html">Jude Mitchell</a>,
+                  <a href=""style="pointer-events: none;">Daniel A. Butts</a>,
+                  <a href="https://bri.ucla.edu/people/alex-huk-ph-d/">Alexander C. Huk</a>,
+                  <a href="https://jake.vision/">Jacob Yates</a>
+                  <br>
+                  <em>bioRxiv</em>, 2026<br>
+                  <a href="https://doi.org/10.64898/2026.10.12.758571">preprint</a>
+
+                </li>
+                <br>
+                <li>
+                  <a href="data/kothapalli_sfn_2026.pdf">Active sensing explains cortical variability and improves visual information</a><br>
+                  <a href="https://decrow3.github.io/">Declan Rowley</a>*,
+                  <a href = 'https://github.com/ryan-ressmeyer'>Ryan Ressmeyer</a>*,
+                  <strong>Tejasvi Kothapalli</strong>*,
+                  <a href="https://bri.ucla.edu/people/alex-huk-ph-d/">Alexander C. Huk</a>,
+                  <a href="https://www.sas.rochester.edu/bcs/people/faculty/mitchell_jude/index.html">Jude Mitchell</a>,
+                  <a href=""style="pointer-events: none;">Daniel A. Butts</a>,
+                  <a href="https://jake.vision/">Jacob Yates</a>
+                  <br>
+                  <em>Society for Neuroscience (SfN)</em>, 2026<br>
+                  <a href="data/kothapalli_sfn_2026.pdf">poster</a>
+
+                </li>
+                <br>
+                <li>
                   <a href="data/kothapalli_sfn_2025_final.pdf">Standard Models Fail to Capture Positional Invariances in Marmoset Foveal V1</a>
                   <strong>Tejasvi Kothapalli</strong>,
                   <a href = 'https://github.com/ryan-ressmeyer'>Ryan Ressmeyer</a>, 
@@ -200,16 +323,6 @@
                   <br>
                   <em>Society for Neuroscience (SfN)</em>, 2025<br>
                   <a href="data/kothapalli_sfn_2025_final.pdf">poster</a>
-
-                </li>
-                <br>
-                <li>
-                  <a>Does V1 do Super Resolution?</a><br>
-                  <strong>Tejasvi Kothapalli</strong>
-                  
-                  <br>
-                  <em>Blog Post</em>, <a href="blogs/denoising/">read here</a><br>
-
 
                 </li>
                 <br>
