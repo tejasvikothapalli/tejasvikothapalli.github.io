@@ -19,7 +19,13 @@
   const timeline = document.querySelector("#timeline");
   const progressFixation = document.querySelector("#progress-fixation");
   const progressTime = document.querySelector("#progress-time");
-  const transformerTokenCount = document.querySelector("#transformer-token-count");
+  const evidencePanel = document.querySelector("#evidence-panel");
+  const posteriorPanel = document.querySelector("#posterior-panel");
+  const clickHint = document.querySelector("#click-hint");
+  const stepNoun = document.querySelector("#step-noun");
+  const progressNoun = document.querySelector("#progress-noun");
+  const patchLegend = document.querySelector("#patch-legend");
+  const fidelityLegendPosterior = document.querySelector("#fidelity-legend-posterior");
   const play = document.querySelector("#play");
   const speed = document.querySelector("#speed");
   const patchToggle = document.querySelector("#patch-toggle");
@@ -55,6 +61,7 @@
     evidence: document.querySelector("#evidence-canvas"),
     posterior: document.querySelector("#posterior-canvas"),
     transformer: document.querySelector("#transformer-canvas"),
+    diffusion: document.querySelector("#diffusion-canvas"),
     raster: document.querySelector("#raster-canvas"),
     groundTruthPatch: document.querySelector("#ground-truth-patch-canvas"),
     patch: document.querySelector("#patch-canvas"),
@@ -63,11 +70,15 @@
   };
 
   // One animal per data root: data/<animal>/manifest.json + scenes.
+  // The paper's initials (arXiv:2611.31989): marmosets A and L were recorded in
+  // V1, macaques O and C in the LGN.
   const ANIMALS = [
-    { id: "allen", label: "Allen" },
-    { id: "logan", label: "Logan" },
+    { id: "monkey-a", label: "Monkey A", kind: "Marmoset V1" },
+    { id: "monkey-l", label: "Monkey L", kind: "Marmoset V1" },
+    { id: "monkey-o", label: "Monkey O", kind: "Macaque LGN" },
+    { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
   ];
-  const DATA_VERSION = "20260901-3";
+  const DATA_VERSION = "20261125-1";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -226,25 +237,63 @@
     // the trial rasters. Hide them rather than show em dashes and 0:00.
     const timed = Boolean(scene.recordingSeconds);
     progressTime.parentElement.hidden = !timed;
-    trialLabel.hidden = !Array.isArray(scene.rasterTrial);
+    trialLabel.hidden = !Array.isArray(scene.rasterTrial) && !Array.isArray(scene.presentation);
     sessionCells.hidden = !Array.isArray(scene.sessionCells);
 
     const hasFidelity = Boolean(scene.fidelity?.counts?.length);
-    fidelityPending.hidden = hasFidelity;
-    if (!hasFidelity) fidelityPending.replaceChildren(...pendingMessage("Fidelity curve"));
+    fidelityPending.hidden = true;
+    fidelityToggle.hidden = !hasFidelity;
+    if (!hasFidelity && !fidelityPanel.hidden) setFidelityVisible(false);
     fidelityToggle.disabled = false;
 
     const hasPatchDecoder = Boolean(scene.assets?.truthPatches && scene.assets?.trialRasters);
     patchPending.hidden = hasPatchDecoder;
     if (!hasPatchDecoder) patchPending.replaceChildren(...pendingMessage("Patch decoder"));
 
-    const hasReplay = Boolean(scene.assets?.replay);
+    const hasReplay = Boolean(scene.assets?.replay) || isLgn(scene);
     replayPending.hidden = hasReplay;
     if (!hasReplay) {
       replayPending.textContent =
         `Per-fixation replay is still rendering for this scene (expected by ${REBUILD_ETA}); ` +
         `the scrubber steps through ${scene.frameCounts?.length ?? 28} checkpoints of the current reconstruction meanwhile.`;
     }
+  }
+
+  // V1 scenes carry the ridge replay (decoded patches, 1/f, patch decoder,
+  // Langevin); LGN scenes carry the gaze and receptive-field timeline only.
+  function applyMode(scene) {
+    const lgn = isLgn(scene);
+    viewer.classList.toggle("is-lgn", lgn);
+    evidencePanel.hidden = lgn;
+    posteriorPanel.hidden = lgn;
+    patchToggle.hidden = lgn;
+    langevinToggle.hidden = lgn;
+    if (lgn && !patchDrawer.hidden) setPatchDrawerVisible(false);
+    if (lgn && !langevinPanel.hidden) setLangevinVisible(false);
+    clickHint.hidden = lgn;
+    stepNoun.textContent = lgn ? "time" : "fixations";
+    progressNoun.textContent = lgn ? "Window" : "Fixation";
+    progressNoun.parentElement.title = lgn ? "One 100-ms window of neural activity every 200 ms of viewing" : "";
+    fidelityLegendPosterior.hidden = !scene.fidelity?.series?.posterior;
+    if (lgn) {
+      patchLegend.textContent = `${Number(scene.tileDegrees || 1)}° receptive fields`;
+    } else {
+      const degrees = Number(scene.patchDegrees);
+      patchLegend.replaceChildren(
+        Object.assign(document.createElement("span"), {
+          className: "patch-degrees",
+          textContent: Number.isFinite(degrees) ? `${degrees.toFixed(2)}°` : "",
+        }),
+        document.createTextNode(" Decoded patch"),
+      );
+    }
+    canvases.truth.setAttribute(
+      "aria-label",
+      lgn
+        ? "Static natural scene with the eye position and receptive fields over viewing time."
+        : "Static natural scene. Click a location to inspect its best decoded patch.",
+    );
+    updatePanelColumns();
   }
 
   function animalLabel(animal = state.animal) {
@@ -325,7 +374,7 @@
 
   function bestPatchAtPoint(x, y) {
     const scene = state.scene;
-    if (!scene) return -1;
+    if (!scene || isLgn(scene)) return -1;
     const errors = scene.patchSelection?.error;
     const maximumSide =
       scene.patchSelection?.maximumSelectableSidePixels ?? Number.POSITIVE_INFINITY;
@@ -383,6 +432,7 @@
     if (
       event.pointerType === "touch" ||
       !state.scene ||
+      isLgn() ||
       !state.images?.original ||
       viewer.getAttribute("aria-busy") === "true"
     ) {
@@ -528,7 +578,8 @@
     }
 
     const [x, y] = roundedPoint(scene.gaze, current);
-    drawPatchWindow(context, current);
+    if (isLgn(scene)) drawLgnTiles(context, current);
+    else drawPatchWindow(context, current);
     drawGaze(context, x, y);
   }
 
@@ -575,114 +626,217 @@
     context.restore();
   }
 
-  function drawTransformerSprite(context, image, progress, frameIndex) {
-    const sourceX = (frameIndex % progress.spriteColumns) * progress.frameWidth;
-    const sourceY = Math.floor(frameIndex / progress.spriteColumns) * progress.frameHeight;
-    context.drawImage(
-      image,
-      sourceX,
-      sourceY,
-      progress.frameWidth,
-      progress.frameHeight,
-      0,
-      0,
-      context.canvas.width,
-      context.canvas.height,
-    );
+  // Transformer and diffusion ----------------------------------------------
+  //
+  // Both panels show the paper's held-out models. `paperProgress.counts[k]` is
+  // the scrubber position at which checkpoint k is exact: the model's packet
+  // restricted to the first presentations of this scene, in chronological order.
+  // Between checkpoints the two exact frames are cross-faded by position; before
+  // the first checkpoint the frame fades in from neutral grey. The last
+  // checkpoint is the paper's own final render (the `transformer` / `diffusion`
+  // image), never a re-render.
+
+  function isLgn(scene = state.scene) {
+    return scene?.mode === "lgn";
   }
 
-  function drawTransformerFrame(context, progress, frameIndex, alpha = 1) {
+  function drawModelFrame(context, kind, frameIndex, alpha) {
+    const progress = state.scene.paperProgress;
     context.save();
     context.globalAlpha = Math.max(0, Math.min(1, alpha));
-    if (frameIndex === progress.counts.length - 1) {
-      context.drawImage(state.images.transformer, 0, 0, context.canvas.width, context.canvas.height);
+    if (!traceHull(context, state.scene.hull)) {
+      context.restore();
+      return;
+    }
+    context.clip();
+    if (frameIndex < 0) {
+      context.fillStyle = "#808080";
+      context.fill();
+    } else if (!progress || frameIndex >= progress.counts.length - 1) {
+      context.drawImage(state.images[kind], 0, 0, context.canvas.width, context.canvas.height);
     } else {
-      drawTransformerSprite(context, state.images.transformerPrefix, progress, frameIndex);
+      const sprite = state.images[`${kind}Prefix`];
+      const sourceX = (frameIndex % progress.spriteColumns) * progress.frameWidth;
+      const sourceY = Math.floor(frameIndex / progress.spriteColumns) * progress.frameHeight;
+      context.drawImage(
+        sprite,
+        sourceX,
+        sourceY,
+        progress.frameWidth,
+        progress.frameHeight,
+        0,
+        0,
+        context.canvas.width,
+        context.canvas.height,
+      );
     }
     context.restore();
   }
 
-  // Prefix frames are exact streamlined-decoder reruns. Every fixation is
-  // rendered between its two neighboring exact frames using both fixation
-  // progress and the number of 33 ms tokens actually admitted, so the
-  // reconstruction changes on every fixation instead of freezing between
-  // checkpoints. The terminal frame remains the shipped BEST bundle.
-  function drawTransformer() {
-    const canvas = canvases.transformer;
+  function drawModel(kind) {
+    const canvas = canvases[kind];
     const context = clearCanvas(canvas);
-    const progress = state.scene.transformerProgress;
-
-    if (
-      progress?.mode?.startsWith("exact-checkpointed-prefix-inference") &&
-      progress.counts?.length &&
-      state.images.transformerPrefix
-    ) {
-      let index = 0;
-      while (
-        index + 1 < progress.counts.length &&
-        progress.counts[index + 1] <= state.count
-      ) {
-        index += 1;
-      }
-      const fixationTokens = progress.fixationTokenCounts;
-      const tokens = Number.isFinite(fixationTokens?.[state.count])
-        ? fixationTokens[state.count]
-        : progress.tokenCounts?.[index];
-      transformerTokenCount.textContent = Number.isFinite(tokens)
-        ? `${tokens.toLocaleString()} × 33 ms tokens`
-        : "33 ms tiled tokens";
-
-      drawTransformerFrame(context, progress, index);
-      if (index + 1 < progress.counts.length) {
-        const leftTokens = Number(progress.tokenCounts?.[index]);
-        const rightTokens = Number(progress.tokenCounts?.[index + 1]);
-        const tokenSpan = rightTokens - leftTokens;
-        const countSpan = progress.counts[index + 1] - progress.counts[index];
-        const countFraction = countSpan > 0
-          ? (state.count - progress.counts[index]) / countSpan
-          : 0;
-        const tokenFraction = Number.isFinite(tokens) && tokenSpan > 0
-          ? (tokens - leftTokens) / tokenSpan
-          : countFraction;
-        // Token counts can occasionally be unchanged for a rejected/duplicate
-        // fixation. Mixing in fixation progress guarantees a distinct visual
-        // state for every step while exact anchor frames remain exact.
-        const fraction = (tokenFraction + countFraction) / 2;
-        drawTransformerFrame(context, progress, index + 1, fraction);
-      }
+    const progress = state.scene.paperProgress;
+    if (!progress?.counts?.length || !state.images[`${kind}Prefix`]) {
+      drawModelFrame(context, kind, Infinity, 1);
       return;
     }
+    const counts = progress.counts;
+    const count = state.count;
+    // index = last exact checkpoint at or before this position (-1 = neutral)
+    let index = -1;
+    while (index + 1 < counts.length && counts[index + 1] <= count) index += 1;
+    drawModelFrame(context, kind, index, 1);
+    if (index + 1 < counts.length) {
+      const from = index < 0 ? 0 : counts[index];
+      const span = counts[index + 1] - from;
+      const linear = span > 0 ? (count - from) / span : 1;
+      // Diffusion samples at neighbouring checkpoints can differ in content, so
+      // its blend is eased to keep double exposures brief.
+      const fraction = kind === "diffusion" ? linear * linear * (3 - 2 * linear) : linear;
+      if (fraction > 0) drawModelFrame(context, kind, index + 1, fraction);
+    }
+  }
 
-    transformerTokenCount.textContent = "33 ms tiled tokens";
+  // Receptive field density -------------------------------------------------
+  //
+  // The paper's coverage maps (Fig. 2C, Figs. S1/S2): every receptive-field
+  // sample splatted with a Gaussian (sigma 7 px for V1, 3.5 px for LGN, on the
+  // 1280 x 720 canvas), shown as sqrt(density / the scene's 99.5th percentile)
+  // from navy to cyan. Here the samples accumulate with the scrubber: one
+  // decoded-patch centre per fixation (V1), or every receptive-field tile of
+  // every 200-ms window (LGN). The scale is the final density's, so the map
+  // fills in as viewing time accumulates.
 
+  const RF_NAVY = [9, 14, 22];
+  const RF_CYAN = [34, 211, 238];
+
+  function rfPrepare(scene) {
+    const lgn = isLgn(scene);
+    const scale = lgn ? 2 : 4;
+    const sigma = (lgn ? 3.5 : 7) / scale;
+    const width = Math.round(1280 / scale);
+    const height = Math.round(720 / scale);
+    const radius = Math.ceil(3 * sigma);
+    const kernel = new Float32Array((2 * radius + 1) ** 2);
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        kernel[(dy + radius) * (2 * radius + 1) + dx + radius] = Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+      }
+    }
+    const xs = [];
+    const ys = [];
+    const start = new Int32Array(scene.total + 1);
+    for (let index = 0; index < scene.total; index += 1) {
+      start[index] = xs.length;
+      if (lgn) {
+        const gx = scene.gaze[index * 2] / 10;
+        const gy = scene.gaze[index * 2 + 1] / 10;
+        for (const [dx, dy] of scene.tileOffsets[scene.session[index]]) {
+          xs.push(gx + dx / 10);
+          ys.push(gy + dy / 10);
+        }
+      } else {
+        const [x0, y0, x1, y1] = patchBox(scene.patchBox, index);
+        xs.push((x0 + x1) / 2);
+        ys.push((y0 + y1) / 2);
+      }
+    }
+    start[scene.total] = xs.length;
+    const rf = {
+      scene,
+      scale,
+      width,
+      height,
+      radius,
+      kernel,
+      xs: Float32Array.from(xs),
+      ys: Float32Array.from(ys),
+      start,
+      grid: new Float32Array(width * height),
+      upTo: 0,
+      norm: 1,
+      canvas: document.createElement("canvas"),
+      image: null,
+    };
+    rf.canvas.width = width;
+    rf.canvas.height = height;
+    rf.image = rf.canvas.getContext("2d").createImageData(width, height);
+    rfAccumulate(rf, scene.total);
+    const positive = rf.grid.filter((value) => value > 0).sort();
+    rf.norm = positive.length ? positive[Math.min(positive.length - 1, Math.floor(0.995 * (positive.length - 1)))] : 1;
+    return rf;
+  }
+
+  function rfAccumulate(rf, count) {
+    if (count < rf.upTo) {
+      rf.grid.fill(0);
+      rf.upTo = 0;
+    }
+    const size = 2 * rf.radius + 1;
+    for (let point = rf.start[rf.upTo]; point < rf.start[count]; point += 1) {
+      const cx = Math.round(rf.xs[point] / rf.scale);
+      const cy = Math.round(rf.ys[point] / rf.scale);
+      for (let dy = -rf.radius; dy <= rf.radius; dy += 1) {
+        const y = cy + dy;
+        if (y < 0 || y >= rf.height) continue;
+        const row = y * rf.width;
+        const krow = (dy + rf.radius) * size + rf.radius;
+        for (let dx = -rf.radius; dx <= rf.radius; dx += 1) {
+          const x = cx + dx;
+          if (x < 0 || x >= rf.width) continue;
+          rf.grid[row + x] += rf.kernel[krow + dx];
+        }
+      }
+    }
+    rf.upTo = count;
+  }
+
+  function drawDensity(current) {
+    const scene = state.scene;
+    if (!state.rf || state.rf.scene !== scene) state.rf = rfPrepare(scene);
+    const rf = state.rf;
+    rfAccumulate(rf, state.count);
+    const data = rf.image.data;
+    for (let index = 0; index < rf.grid.length; index += 1) {
+      const value = Math.sqrt(Math.min(1, rf.grid[index] / rf.norm));
+      const offset = index * 4;
+      data[offset] = RF_NAVY[0] + (RF_CYAN[0] - RF_NAVY[0]) * value;
+      data[offset + 1] = RF_NAVY[1] + (RF_CYAN[1] - RF_NAVY[1]) * value;
+      data[offset + 2] = RF_NAVY[2] + (RF_CYAN[2] - RF_NAVY[2]) * value;
+      data[offset + 3] = 255;
+    }
+    rf.canvas.getContext("2d").putImageData(rf.image, 0, 0);
+    const context = clearCanvas(canvases.density);
     context.save();
-    if (traceHull(context, state.scene.hull)) {
-      context.fillStyle = "#808080";
-      context.fill();
+    if (traceHull(context, scene.hull)) context.clip();
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(rf.canvas, 0, 0, canvases.density.width, canvases.density.height);
+    context.restore();
+    if (current >= 0) {
+      if (isLgn()) drawLgnTiles(context, current);
+      else drawPatchWindow(context, current);
+    }
+  }
+
+  // LGN replay: gaze, trail and receptive-field tiles ------------------------
+
+  function lgnTileSize() {
+    return (state.scene.pixelsPerDegree || 27.7) * (state.scene.tileDegrees || 1);
+  }
+
+  function drawLgnTiles(context, current) {
+    const scene = state.scene;
+    const [x, y] = roundedPoint(scene.gaze, current);
+    const size = lgnTileSize();
+    context.save();
+    context.strokeStyle = colors.patch;
+    context.lineWidth = 3;
+    for (const [dx, dy] of scene.tileOffsets[scene.session[current]]) {
+      context.strokeRect(x + dx / 10 - size / 2, y + dy / 10 - size / 2, size, size);
     }
     context.restore();
-
-    if (!progress?.counts?.length || !progress?.hulls?.length) {
-      drawImageInsideHull(context, state.images.transformer, state.scene.hull);
-      return;
-    }
-
-    const counts = progress.counts;
-    let index = 0;
-    while (index + 1 < counts.length && counts[index + 1] <= state.count) index += 1;
-    drawImageInsideHull(context, state.images.transformer, progress.hulls[index]);
-
-    if (index + 1 < counts.length) {
-      const span = counts[index + 1] - counts[index];
-      const fraction = span > 0 ? (state.count - counts[index]) / span : 1;
-      const eased = fraction * fraction * (3 - 2 * fraction);
-      drawImageInsideHull(
-        context,
-        state.images.transformer,
-        progress.hulls[index + 1],
-        Math.max(0, Math.min(1, eased)),
-      );
-    }
   }
 
   function drawReplaySlice(canvas, column) {
@@ -826,20 +980,23 @@
 
   const FIDELITY_SERIES = [
     { key: "posterior", label: "1/f reconstruction", color: "--fidelity-posterior", dash: [] },
-    {
-      key: "transformer",
-      label: "End-to-end transformer",
-      color: "--fidelity-transformer",
-      dash: [26, 18],
-    },
+    { key: "transformer", label: "Transformer", color: "--fidelity-transformer", dash: [26, 18] },
+    { key: "diffusion", label: "Diffusion", color: "--fidelity-diffusion", dash: [6, 16] },
   ];
+
+  // Series present for this scene (LGN has no 1/f reconstruction).
+  function fidelitySeries(scene = state.scene) {
+    return FIDELITY_SERIES.filter((definition) => scene?.fidelity?.series?.[definition.key]);
+  }
 
   // Layout is always computed in this fixed coordinate space, so the plot can
   // never reflow with panel width. Only the backing-store resolution tracks the
   // display size, which keeps the type crisp instead of downscaled.
   const FIDELITY_VIEW = { width: 1280, height: 720 };
   const FIDELITY_PLOT = { right: 52, top: 74, bottom: 178 };
-  const FIDELITY_ROWS = ["Fixations", "Viewing time"];
+  function fidelityRows() {
+    return [isLgn() ? "Windows" : "Fixations", "Viewing time"];
+  }
 
   function niceTicks(minimum, maximum, target) {
     const span = maximum - minimum;
@@ -888,7 +1045,7 @@
     const metricKey = state.fidelityMetric;
     let minimum = Infinity;
     let maximum = -Infinity;
-    for (const definition of FIDELITY_SERIES) {
+    for (const definition of fidelitySeries(scene)) {
       for (const value of values[definition.key][metricKey]) {
         if (value < minimum) minimum = value;
         if (value > maximum) maximum = value;
@@ -908,7 +1065,7 @@
       ),
     );
     measure.font = `600 44px ${family}`;
-    const labelWidth = Math.max(...FIDELITY_ROWS.map((text) => measure.measureText(text).width));
+    const labelWidth = Math.max(...fidelityRows().map((text) => measure.measureText(text).width));
     const left = Math.ceil(Math.max(tickWidth, labelWidth)) + 30;
     const right = FIDELITY_VIEW.width - FIDELITY_PLOT.right;
     const top = FIDELITY_PLOT.top;
@@ -1027,7 +1184,7 @@
       ]),
       fixationRowY,
     );
-    rowLabel(FIDELITY_ROWS[0], fixationRowY);
+    rowLabel(fidelityRows()[0], fixationRowY);
 
     const span = scene.viewingSeconds[scene.total];
     const timeStep = [15, 30, 60, 120, 300, 600, 900].find((step) => span / step <= 4) ?? 1800;
@@ -1038,7 +1195,7 @@
       timeTicks.push([x, formatViewingTime(seconds), timeTicks.length === 0 ? "left" : "center"]);
     }
     tickRow(timeTicks, timeRowY);
-    rowLabel(FIDELITY_ROWS[1], timeRowY);
+    rowLabel(fidelityRows()[1], timeRowY);
 
     context.font = labelFont;
     context.fillStyle = label;
@@ -1047,13 +1204,22 @@
     context.fillText(plot.metric.axis, plot.left, plot.top - 24);
 
     // Identity comes from the caption legend plus solid/dashed.
-    const strokes = FIDELITY_SERIES.map((definition) => ({
+    const strokes = fidelitySeries(scene).map((definition) => ({
       ...definition,
       values: fidelity.series[definition.key][plot.metricKey],
       counts: fidelity.series[definition.key].counts ?? fidelity.counts,
       stroke: styles.getPropertyValue(definition.color).trim(),
     }));
     for (const entry of strokes) {
+      if (entry.counts.length === 1) {
+        // A single exact point (the final reconstruction): a ring at its position.
+        context.beginPath();
+        context.arc(plot.x(entry.counts[0]), plot.y(entry.values[0]), 17, 0, Math.PI * 2);
+        context.strokeStyle = entry.stroke;
+        context.lineWidth = 7;
+        context.stroke();
+        continue;
+      }
       context.save();
       context.beginPath();
       entry.counts.forEach((count, index) => {
@@ -1082,6 +1248,7 @@
     context.stroke();
     context.restore();
     for (const entry of strokes) {
+      if (entry.counts.length < 2 || state.count < entry.counts[0]) continue;
       const value = fidelityValueAt(entry.values, entry.counts, state.count);
       context.beginPath();
       context.arc(markerX, plot.y(value), 15, 0, Math.PI * 2);
@@ -1333,13 +1500,26 @@
     }
   }
 
-  // One source of truth for the panel row: four comparison panels plus whichever
-  // optional diagnostic panels are open.
+  // A 60-column grid. The core comparison always shares the first row (five
+  // V1 panels, three LGN panels); diagnostics take a centred second row, so
+  // opening a tool never squeezes or reorders the comparison. LGN has room for
+  // the density map in the first row.
   function updatePanelColumns() {
-    const optional = [densityPanel, langevinPanel, fidelityPanel].filter(
-      (panel) => !panel.hidden,
-    ).length;
-    panelGrid.dataset.columns = String(4 + optional);
+    const lgn = isLgn();
+    const core = lgn ? 3 : 5;
+    const optional = [densityPanel, langevinPanel, fidelityPanel].filter((panel) => !panel.hidden);
+    const firstRow = lgn && !densityPanel.hidden ? [densityPanel] : [];
+    const secondRow = optional.filter((panel) => !firstRow.includes(panel));
+    const span = 60 / (core + firstRow.length);
+    panelGrid.style.setProperty("--core-span", String(span));
+    firstRow.forEach((panel) => {
+      panel.style.gridColumn = `span ${span}`;
+    });
+    secondRow.forEach((panel) => {
+      panel.style.gridColumn =
+        secondRow.length === 1 ? "16 / span 30" : secondRow.length === 2 ? "span 30" : "span 20";
+    });
+    panelGrid.dataset.columns = String(core + optional.length);
   }
 
   function drawPatch(current) {
@@ -1453,34 +1633,30 @@
   function paint() {
     if (!state.scene || !state.images) return;
     const current = state.count - 1;
+    const lgn = isLgn();
     drawTruth(current);
-    let densityContext;
-    let evidenceContext;
-    if (state.videoReady && !state.videoSeeking && replayVideo.readyState >= 2) {
-      if (!densityPanel.hidden) densityContext = drawReplaySlice(canvases.density, 0);
-      evidenceContext = drawReplaySlice(canvases.evidence, 1);
-      drawReplaySlice(canvases.posterior, 2);
-    } else {
-      const frameIndex = frameIndexForCount(state.count);
-      if (!densityPanel.hidden) {
-        densityContext = drawSprite(canvases.density, state.images.density, frameIndex);
+    if (!lgn) {
+      let evidenceContext;
+      if (state.videoReady && !state.videoSeeking && replayVideo.readyState >= 2) {
+        evidenceContext = drawReplaySlice(canvases.evidence, 1);
+        drawReplaySlice(canvases.posterior, 2);
+      } else {
+        const frameIndex = frameIndexForCount(state.count);
+        evidenceContext = drawSprite(canvases.evidence, state.images.evidence, frameIndex);
+        drawSprite(canvases.posterior, state.images.posterior, frameIndex);
       }
-      evidenceContext = drawSprite(canvases.evidence, state.images.evidence, frameIndex);
-      drawSprite(canvases.posterior, state.images.posterior, frameIndex);
+      if (current >= 0) drawPatchWindow(evidenceContext, current);
     }
-    drawTransformer();
+    drawModel("transformer");
+    drawModel("diffusion");
+    if (!densityPanel.hidden) drawDensity(current);
 
     if (current >= 0) {
-      const [x, y] = roundedPoint(state.scene.gaze, current);
-      if (densityContext) {
-        drawHull(densityContext, state.scene.hull);
-        drawGaze(densityContext, x, y);
-      }
-      drawPatchWindow(evidenceContext, current);
       const sessionIndex = state.scene.session[current];
       dateLabel.textContent = state.scene.dates[sessionIndex];
-      // rasterTrial and sessionCells arrive with the trial rasters.
-      const presentation = state.scene.rasterTrial?.[current];
+      // rasterTrial and sessionCells arrive with the trial rasters (V1);
+      // LGN steps carry their presentation index directly.
+      const presentation = lgn ? state.scene.presentation[current] : state.scene.rasterTrial?.[current];
       trialLabel.textContent =
         presentation == null ? "Presentation —" : `Presentation ${(presentation + 1).toLocaleString()}`;
       const sessionCellCount = state.scene.sessionCells?.[sessionIndex];
@@ -1492,8 +1668,8 @@
       sessionCells.textContent = "— cells";
     }
 
-    if (!patchDrawer.hidden) drawPatch(current);
-    if (!langevinPanel.hidden) syncLangevin();
+    if (!lgn && !patchDrawer.hidden) drawPatch(current);
+    if (!lgn && !langevinPanel.hidden) syncLangevin();
     drawFidelity();
     timeline.value = String(state.count);
     progressFixation.textContent = `${state.count.toLocaleString()} / ${state.scene.total.toLocaleString()}`;
@@ -1695,24 +1871,32 @@
       if (!response.ok) throw new Error(`Scene metadata returned ${response.status}`);
       const scene = await response.json();
       const paths = imagePaths(scene, dataPath);
-      const names = ["original", "density", "evidence", "posterior", "transformer"];
+      const names = isLgn(scene)
+        ? ["original", "transformer", "diffusion"]
+        : ["original", "evidence", "posterior", "transformer", "diffusion"];
       if (paths.transformerPrefix) names.push("transformerPrefix");
+      if (paths.diffusionPrefix) names.push("diffusionPrefix");
       const loaded = await Promise.all(names.map((name) => loadImage(paths[name])));
       if (token !== state.loadToken) return;
       state.scene = scene;
+      state.rf = null;
       prepareViewingTimeline(scene);
       state.images = Object.fromEntries(names.map((name, index) => [name, loaded[index]]));
       state.assetPaths = paths;
       state.patchPromise = null;
       applySceneGeometry(scene);
       applyRebuildState(scene);
+      applyMode(scene);
       const minutes = scene.recordingSeconds / 60;
       const cells = Number(scene.totalCells);
-      sceneData.textContent =
-        `${animalLabel()} · ${scene.dates.length.toLocaleString()} sessions` +
-        (minutes ? ` · ${minutes.toFixed(1)} min free viewing` : "") +
-        (cells ? ` · ${cells.toLocaleString()} cells` : "") +
-        ` · ${scene.total.toLocaleString()} fixations`;
+      sceneData.textContent = isLgn(scene)
+        ? `${animalLabel()} · ${scene.dates.length.toLocaleString()} sessions` +
+          ` · ${minutes.toFixed(1)} min viewing` +
+          ` · ${scene.presentationCount.toLocaleString()} presentations`
+        : `${animalLabel()} · ${scene.dates.length.toLocaleString()} sessions` +
+          (minutes ? ` · ${minutes.toFixed(1)} min free viewing` : "") +
+          (cells ? ` · ${cells.toLocaleString()} cells` : "") +
+          ` · ${scene.total.toLocaleString()} fixations`;
       timeline.max = String(scene.total);
       state.count = scene.total;
       state.fractionalCount = scene.total;
@@ -1731,8 +1915,8 @@
           state.videoSeeking = false;
           replayPending.hidden = false;
           replayPending.textContent =
-            `Per-fixation replay for this scene is being re-rendered (expected by ${REBUILD_ETA}); ` +
-            `the scrubber steps through ${scene.frameCounts?.length ?? 28} checkpoints of the current reconstruction meanwhile.`;
+            `This browser could not play the per-fixation replay, so the decoded patches and the 1/f ` +
+            `reconstruction step through ${scene.frameCounts?.length ?? 28} checkpoints instead.`;
         }
       }
       if (token !== state.loadToken) return;
@@ -1762,14 +1946,14 @@
       button.setAttribute("aria-selected", "false");
       button.setAttribute(
         "aria-label",
-        `${record.title}: original and transformer reconstruction`,
+        `${record.title}: photograph and diffusion reconstruction`,
       );
 
       const image = document.createElement("img");
       image.src = `${dataRoot()}/${record.thumb}`;
       image.alt = "";
-      image.width = 322;
-      image.height = 90;
+      image.width = 600;
+      image.height = 200;
       image.loading = "lazy";
       image.decoding = "async";
 
@@ -1781,7 +1965,7 @@
     });
     grid.replaceChildren(fragment);
     sceneCount.textContent =
-      `${records.length} scenes · original | transformer reconstruction`;
+      `${records.length} scenes · photograph | diffusion reconstruction`;
   }
 
   function stopArrowHold() {
@@ -1937,7 +2121,7 @@
     densityPanel.hidden = !show;
     updatePanelColumns();
     densityToggle.setAttribute("aria-pressed", String(show));
-    densityToggle.textContent = show ? "Hide fixation density" : "Show fixation density";
+    densityToggle.textContent = show ? "Hide receptive field density" : "Show receptive field density";
     if (show) paint();
   });
 
@@ -1989,11 +2173,12 @@
     return manifest;
   }
 
-  function animalSummary(manifest) {
+  function animalSummary(manifest, animal) {
     if (!manifest) return "";
     const parts = [];
+    const kind = ANIMALS.find((entry) => entry.id === animal)?.kind;
+    if (kind) parts.push(kind);
     if (manifest.sessions) parts.push(`${manifest.sessions} sessions`);
-    if (manifest.cells) parts.push(`${manifest.cells.toLocaleString()} cells`);
     parts.push(`${manifest.sceneCount ?? manifest.scenes.length} scenes`);
     return parts.join(" · ");
   }
@@ -2011,7 +2196,7 @@
       name.textContent = animal.label;
       const stats = document.createElement("span");
       stats.className = "animal-stats";
-      stats.textContent = animalSummary(state.animalManifests.get(animal.id)) || "—";
+      stats.textContent = animalSummary(state.animalManifests.get(animal.id), animal.id) || "—";
       button.append(name, stats);
       button.addEventListener("click", () => selectAnimal(animal.id));
       fragment.append(button);
@@ -2020,13 +2205,21 @@
     markAnimal();
   }
 
+  const animalNote = document.querySelector("#animal-note");
+  const ANIMAL_NOTE = animalNote.textContent;
+
   function markAnimal() {
+    animalNote.textContent =
+      ANIMAL_NOTE +
+      (state.animal === "monkey-c"
+        ? " Monkey C saw an earlier color rendering of the photographs, so they look warmer."
+        : "");
     animalGrid.querySelectorAll(".animal-card").forEach((card) => {
       const selected = card.dataset.animal === state.animal;
       card.classList.toggle("is-selected", selected);
       card.setAttribute("aria-checked", String(selected));
       const stats = card.querySelector(".animal-stats");
-      const summary = animalSummary(state.animalManifests.get(card.dataset.animal));
+      const summary = animalSummary(state.animalManifests.get(card.dataset.animal), card.dataset.animal);
       if (summary) stats.textContent = summary;
     });
   }
@@ -2040,7 +2233,7 @@
     releaseReplay();
     state.animal = animal;
     state.langevin.token = -1;
-    setBusy(true, "Loading animal…");
+    setBusy(true, "Loading monkey…");
     const manifest = await loadAnimalManifest(animal);
     state.manifest = manifest;
     markAnimal();

@@ -184,7 +184,7 @@
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 322 / 90;
+  aspect-ratio: 3 / 1;
   object-fit: cover;
   border-radius: 3px;
   background: #090e16;
@@ -289,28 +289,18 @@
   color: var(--border);
 }
 
-/* The four method panels share the first row. Diagnostics use a centered second
-   row so opening a tool never squeezes or reorders the primary comparison. */
+/* The method panels share the first row (five for V1, three for LGN) on a
+   60-column grid; app.js updatePanelColumns() places the diagnostics in a
+   centred second row, so opening a tool never squeezes or reorders the
+   primary comparison. */
 .panel-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: repeat(60, minmax(0, 1fr));
   gap: 8px;
 }
 
 .panel-grid .core-panel {
-  grid-column: span 3;
-}
-
-.panel-grid[data-columns="5"] .optional-panel:not([hidden]) {
-  grid-column: 4 / span 6;
-}
-
-.panel-grid[data-columns="6"] .optional-panel:not([hidden]) {
-  grid-column: span 6;
-}
-
-.panel-grid[data-columns="7"] .optional-panel:not([hidden]) {
-  grid-column: span 4;
+  grid-column: span var(--core-span, 12);
 }
 
 @media (min-width: 901px) {
@@ -318,12 +308,15 @@
     align-items: flex-start;
     flex-direction: column;
     justify-content: flex-start;
-    min-height: 92px;
+  }
+
+  .panel-grid .core-panel figcaption {
+    min-height: 58px;
   }
 
   .panel-grid .panel-legend {
     flex-wrap: wrap;
-    gap: 4px 7px;
+    gap: 2px 7px;
   }
 }
 
@@ -358,39 +351,16 @@
   white-space: nowrap;
 }
 
-.transformer-panel figcaption {
-  align-items: flex-start;
-  flex-direction: column;
-  justify-content: flex-start;
+.panel-title {
+  white-space: nowrap;
 }
 
-.transformer-caption {
-  display: grid;
-  gap: 3px;
-  white-space: normal !important;
+.is-lgn #truth-canvas {
+  cursor: default;
 }
 
-.transformer-caption strong {
-  line-height: 1.25;
-}
-
-.transformer-caption em {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.3;
-}
-
-.transformer-caption b {
-  color: var(--text);
-  font-size: 9px;
-  line-height: 1.35;
-}
-
-@media (min-width: 681px) {
-  .panel-grid .core-panel figcaption {
-    min-height: 128px;
-  }
+.is-lgn .scene-click-hint {
+  display: none;
 }
 
 .visual-panel canvas {
@@ -556,6 +526,10 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.panel-legend > span[hidden] {
+  display: none;
 }
 
 .legend-line {
@@ -1078,6 +1052,7 @@
   --fidelity-surface: #090e16;
   --fidelity-posterior: #3987e5;
   --fidelity-transformer: #f08a24;
+  --fidelity-diffusion: #c084fc;
   --fidelity-grid: rgba(255, 255, 255, 0.14);
   --fidelity-axis: rgba(255, 255, 255, 0.34);
   --fidelity-ink: rgba(255, 255, 255, 0.94);
@@ -1100,6 +1075,12 @@
   width: 12px;
   border-top-style: dashed;
   border-color: var(--fidelity-transformer);
+}
+
+.legend-diffusion {
+  width: 12px;
+  border-top-style: dotted;
+  border-color: var(--fidelity-diffusion);
 }
 
 /* Two explicit rows -- title with the selector beside it, legend below -- so
@@ -1315,4 +1296,26 @@
   .load-progress-bar {
     transition: none;
   }
+}
+
+/* Affiliations: one line per institution group, wrapping as a list. */
+.affiliations {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+}
+
+.keyboard-hint > li[hidden] {
+  display: none;
+}
+
+/* Panels in a row share one height (grid stretch); the caption takes the slack,
+   so every image in the row starts at the same height however the legends wrap. */
+.panel-grid .visual-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-grid .visual-panel > figcaption {
+  flex: 1 0 auto;
 }

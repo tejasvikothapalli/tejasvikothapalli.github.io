@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Decoding Scenes from V1 During Natural Vision</title>
+    <title>Decoding Scenes from LGN and V1 During Natural Vision</title>
     <meta
       name="description"
-      content="Interactive reconstructions of static natural scenes from free-viewing V1 activity."
+      content="Interactive reconstructions of static natural scenes from monkey LGN and V1 activity during free viewing."
     />
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="../denoising/style.css?v=20260901-3" />
-    <link rel="stylesheet" href="./style.css?v=20260901-3" />
+    <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
+    <link rel="stylesheet" href="./style.css?v=20261125-1" />
   </head>
   <body>
     <header class="topbar">
@@ -29,23 +29,37 @@
 
     <main class="wrap scene-post">
       <p class="eyebrow">Natural vision</p>
-      <h1>Decoding Scenes from V1 During Natural Vision</h1>
+      <h1>Decoding Scenes from LGN and V1 During Natural Vision</h1>
       <p class="subtitle">
-        Reconstructing static natural scenes from marmoset V1 activity during free viewing.
+        Reconstructing static natural scenes from monkey LGN and V1 activity during free viewing.
       </p>
 
       <section class="meta" aria-label="Post metadata">
         <div class="meta-row">
           <span class="k">Authors</span>
           <span class="v authors">
-            Tejasvi Kothapalli<sup>1</sup>,
+            Tejasvi Kothapalli<sup>1,*</sup>,
+            <a href="https://github.com/ryan-ressmeyer">Ryan Ressmeyer</a><sup>2,*</sup>,
+            <a href="https://decrow3.github.io/">Declan Rowley</a><sup>3,*</sup>,
+            Gregory D. Horwitz<sup>2</sup>,
+            <a href="https://www.sas.rochester.edu/bcs/people/faculty/mitchell_jude/index.html">Jude Mitchell</a><sup>4</sup>,
+            <a href="https://bri.ucla.edu/people/alex-huk-ph-d/">Alexander C. Huk</a><sup>3</sup>,
             <a href="https://www.rctn.org/bruno/">Bruno Olshausen</a><sup>1</sup>,
             <a href="https://jake.vision/">Jacob Yates</a><sup>1</sup>
           </span>
         </div>
         <div class="meta-row">
-          <span class="k">Affiliation</span>
-          <span class="v muted"><sup>1</sup> UC Berkeley Redwood Center for Theoretical Neuroscience</span>
+          <span class="k">Affiliations</span>
+          <span class="v muted affiliations">
+            <span><sup>1</sup> UC Berkeley</span>
+            <span><sup>2</sup> University of Washington</span>
+            <span><sup>3</sup> UCLA</span>
+            <span><sup>4</sup> University of Rochester</span>
+          </span>
+        </div>
+        <div class="meta-row">
+          <span class="k">Paper</span>
+          <span class="v"><a href="https://arxiv.org/abs/2611.31989">arXiv:2611.31989</a></span>
         </div>
         <div class="meta-row">
           <span class="k">Published</span>
@@ -54,7 +68,7 @@
         <div class="meta-row">
           <span class="k">Tags</span>
           <span class="v muted">
-            Decoding, Denoising, Natural Scenes, Transformers, 1/f<sup>2</sup>, Free-viewing, V1
+            Decoding, Denoising, Natural Scenes, Transformers, Diffusion, 1/f<sup>2</sup>, Free-viewing, LGN, V1
           </span>
         </div>
       </section>
@@ -62,32 +76,35 @@
       <aside class="method" aria-label="Abstract">
         <span>Abstract</span>
         <p>
-          To our knowledge, decoding a full static natural scene from V1 activity during natural
-          vision has never been done. Here, we present two complementary methods for reconstructing
-          a static scene from V1 activity while a marmoset freely views it. We record neural activity
-          from marmoset foveal V1. Due to retinotopy and the recording location, all recorded cells
-          respond to a ~0.5° × 0.5° region of visual space near the center of gaze. Our first,
-          principled two-stage method uses ridge regression to predict this gaze-contingent patch at
-          every fixation. Eye position places each decoded patch in scene coordinates; patches
-          accumulated across fixations and sessions are then combined with a 1/f prior to reconstruct
-          the full scene. Our second method uses state-of-the-art deep learning to build a foundation
-          decoder: a transformer consumes streamlined 33 ms neural tokens and directly reconstructs
-          the scene, without explicit fixation detection, saccade excision, or hand-tuned event rules.
-          The interactive visualization compares both methods for each animal. Every reconstruction
-          is fully held out—the decoder was never trained on the scene it reconstructs.
+          Reconstructing images from brain activity has two broad goals. The first is to build brain&ndash;computer
+          interfaces. The second is to understand how the brain sees. The eyes deliver incomplete, noisy input, so the
+          brain must fill in the gaps with its expectations of what natural scenes look like. This filling-in relies on
+          the brain&rsquo;s prior over natural images. Image reconstruction lets us test which natural image prior best
+          matches the brain&rsquo;s natural image prior. However, most previous work on image reconstruction relies on an
+          unnatural condition: subjects must hold their eyes still. In reality, primates constantly move their eyes to see
+          the world. <strong>We introduce a framework for reconstructing images from neural activity while a primate freely
+          views a static natural scene.</strong> We record from five monkeys with high-density electrode arrays in the
+          lateral geniculate nucleus (LGN) and primary visual cortex (V1). The recorded receptive fields cover only a small
+          part of the image. Thus, we combine neural activity across eye movements, trials, and sessions to reconstruct the
+          full image. We first present a simple linear method with a 1/<i>f</i> prior. We then scale this approach up with
+          modern deep learning. We train a decoder by tokenizing spiking activity and measured gaze; these tokens are fed
+          into a transformer and diffusion model to reconstruct the full scene. Three factors determine reconstruction
+          quality: the amount of neural evidence combined over viewing time, the accuracy of eye tracking, and the choice
+          of image prior. <strong>Our method sets a new state-of-the-art performance in reconstructing natural images from
+          brain activity, across brain recording modalities: fMRI, EEG, MEG and electrophysiology.</strong>
         </p>
       </aside>
 
       <section class="animal-picker" aria-labelledby="animal-heading">
         <div class="section-heading">
           <div>
-            <h2 id="animal-heading">Animal</h2>
+            <h2 id="animal-heading">Monkey</h2>
             <p>
-              <span id="animal-note">Each animal has its own sessions, decoder and reconstructions.</span>
+              <span id="animal-note">Marmosets A and L were recorded in V1, macaques O and C in the LGN. Every reconstruction is held out: no decoder saw the photograph it reconstructs.</span>
             </p>
           </div>
         </div>
-        <div id="animal-grid" class="animal-grid" role="radiogroup" aria-label="Choose an animal"></div>
+        <div id="animal-grid" class="animal-grid" role="radiogroup" aria-label="Choose a monkey"></div>
       </section>
 
       <section class="scene-picker" aria-labelledby="scene-heading">
@@ -112,7 +129,7 @@
           </div>
           <div class="viewer-actions">
             <button id="density-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="density-panel">
-              Show fixation density
+              Show receptive field density
             </button>
             <button id="patch-toggle" class="quiet-button" type="button" aria-pressed="false" aria-controls="patch-drawer">
               Show patch decoder
@@ -140,19 +157,19 @@
         </div>
 
         <ol id="keyboard-hint" class="keyboard-hint">
-          <li>Click a point in the original scene to inspect the separate local patch decoder.</li>
+          <li id="click-hint">Click a point in the original scene to inspect the separate local patch decoder.</li>
           <li class="keyboard-instruction">
-            <kbd>←</kbd><kbd>→</kbd> step through fixations · hold to accelerate
+            <kbd>←</kbd><kbd>→</kbd> step through <span id="step-noun">fixations</span> · hold to accelerate
           </li>
         </ol>
 
-        <div class="panel-grid">
+        <div class="panel-grid" data-core="5">
           <figure class="visual-panel core-panel">
             <figcaption>
-              <span>Static natural scene</span>
+              <span class="panel-title">Static natural scene</span>
               <span class="panel-legend">
                 <span><i class="legend-line legend-hull"></i>Hull</span>
-                <span><i class="legend-square"></i><span class="patch-degrees">0.35°</span> Decoded patch</span>
+                <span><i class="legend-square"></i><span id="patch-legend"><span class="patch-degrees">0.35°</span> Decoded patch</span></span>
                 <span><i class="legend-dot"></i>Eye position</span>
               </span>
             </figcaption>
@@ -174,16 +191,16 @@
             </div>
           </figure>
 
-          <figure class="visual-panel core-panel">
+          <figure id="evidence-panel" class="visual-panel core-panel ridge-panel">
             <figcaption>
-              <span>Decoded patches</span>
+              <span class="panel-title">Decoded patches</span>
             </figcaption>
             <canvas id="evidence-canvas" width="1280" height="720"></canvas>
           </figure>
 
-          <figure class="visual-panel core-panel">
+          <figure id="posterior-panel" class="visual-panel core-panel ridge-panel">
             <figcaption>
-              <span>1/f reconstruction</span>
+              <span class="panel-title">1/f reconstruction</span>
               <span
                 class="panel-legend"
                 title="Per-band display gain, fit leave-one-photo-out: this photograph's gains come from the other 26, so no photo contributes to its own display. The MAP estimate is shrunk toward the mean by construction, so each band is rescaled toward the corpus band contrast, damped by that band's correlation. Display only, and not part of decoding, calibration, the prior, the hull or the solve."
@@ -194,41 +211,45 @@
             <canvas id="posterior-canvas" width="1280" height="720"></canvas>
           </figure>
 
-          <figure class="visual-panel core-panel transformer-panel">
+          <figure class="visual-panel core-panel">
             <figcaption>
-              <span class="transformer-caption">
-                <strong>End-to-end transformer reconstruction</strong>
-                <em>33 ms neural tokens + gaze position → full scene directly</em>
-                <b>No patch decoder · No fixation segmentation · No 1/f reconstruction</b>
-              </span>
-              <span
-                class="panel-legend"
-                title="Exact held-out transformer checkpoints are aligned to the source 120 Hz clock. Every fixation gets a distinct state between adjacent checkpoints, guided by fixation progress and its exact accumulated 33 ms token count. The final frame comes directly from the shipped result bundle."
-              >
-                <span id="transformer-token-count">33 ms tiled tokens</span>
-              </span>
+              <span class="panel-title">Transformer</span>
             </figcaption>
             <canvas
               id="transformer-canvas"
               width="1280"
               height="720"
-              aria-label="Fixation-resolved transformer scene reconstruction as 33 ms tiled neural tokens accumulate."
+              aria-label="Transformer reconstruction of the scene from the neural activity and gaze so far."
+            ></canvas>
+          </figure>
+
+          <figure class="visual-panel core-panel">
+            <figcaption>
+              <span class="panel-title">Diffusion</span>
+            </figcaption>
+            <canvas
+              id="diffusion-canvas"
+              width="1280"
+              height="720"
+              aria-label="Diffusion-model reconstruction of the scene from the neural activity and gaze so far."
             ></canvas>
           </figure>
 
           <figure id="density-panel" class="visual-panel optional-panel" hidden>
             <figcaption>
-              <span>Fixation density</span>
-              <span class="panel-legend">
-                <span><i class="legend-line legend-hull"></i>Hull</span>
-              </span>
+              <span class="panel-title">Receptive field density</span>
             </figcaption>
-            <canvas id="density-canvas" width="1280" height="720"></canvas>
+            <canvas
+              id="density-canvas"
+              width="1280"
+              height="720"
+              aria-label="Where the recorded receptive fields have landed on the scene so far."
+            ></canvas>
           </figure>
 
           <figure id="langevin-panel" class="visual-panel optional-panel langevin-panel" hidden>
             <figcaption>
-              <span>Langevin sample</span>
+              <span class="panel-title">Langevin sample</span>
               <span class="panel-legend langevin-legend">
                 <span><i class="legend-line legend-hull"></i>Hull</span>
                 <span id="langevin-iterations">0 steps</span>
@@ -244,7 +265,7 @@
 
           <figure id="fidelity-panel" class="visual-panel optional-panel fidelity-panel" hidden>
             <figcaption>
-              <span>Reconstruction fidelity</span>
+              <span class="panel-title">Reconstruction fidelity</span>
               <label class="fidelity-metric">
                 <span class="sr-only">Fidelity metric</span>
                 <select id="fidelity-metric" aria-label="Fidelity metric">
@@ -255,8 +276,9 @@
                 </select>
               </label>
               <span class="panel-legend fidelity-legend">
-                <span><i class="legend-line legend-posterior"></i>1/f reconstruction</span>
-                <span><i class="legend-line legend-transformer"></i>End-to-end transformer</span>
+                <span id="fidelity-legend-posterior"><i class="legend-line legend-posterior"></i>1/f reconstruction</span>
+                <span><i class="legend-line legend-transformer"></i>Transformer</span>
+                <span><i class="legend-line legend-diffusion"></i>Diffusion</span>
               </span>
             </figcaption>
             <div class="canvas-stage">
@@ -264,7 +286,7 @@
                 id="fidelity-canvas"
                 width="1280"
                 height="720"
-                aria-label="Fidelity of the 1/f and end-to-end transformer reconstructions against fixation count and viewing time. Click to jump the timeline."
+                aria-label="Fidelity of the reconstructions against viewing time. Click to jump the timeline."
               ></canvas>
               <p id="fidelity-pending" class="panel-pending" hidden></p>
             </div>
@@ -346,7 +368,7 @@
             <input id="timeline" type="range" min="0" max="1" value="0" aria-describedby="keyboard-hint" />
           </label>
           <output id="progress" aria-live="polite">
-            <span><small>Fixation</small><b id="progress-fixation">0 / 0</b></span>
+            <span><small id="progress-noun">Fixation</small><b id="progress-fixation">0 / 0</b></span>
             <span><small>Viewing time</small><b id="progress-time">0:00 / 0:00</b></span>
           </output>
           <label class="speed-control">
@@ -411,6 +433,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20260901-3" defer></script>
+    <script src="./app.js?v=20261125-1" defer></script>
   </body>
 </html>
