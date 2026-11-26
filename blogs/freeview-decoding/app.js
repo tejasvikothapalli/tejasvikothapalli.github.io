@@ -86,7 +86,7 @@
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
     { id: "livingstone", label: "Livingstone data", kind: "Macaques V1 to IT" },
   ];
-  const DATA_VERSION = "20261126-4";
+  const DATA_VERSION = "20261126-5";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -3102,9 +3102,10 @@
       "the picture, pooled across monkeys and sessions, by an earlier decoder; the last frame is our current best decoder, using all of them. " +
       "The maps are the decoded features' read-out of people, faces (human or monkey) and monkeys, on a fixed 0 to 1 scale.",
     faces:
-      "The 100 faces with the most fixations near them: a best case, not a random sample. Each face is cut from its picture at its " +
-      "true location (the decoder is told where the face is) and decoded from the fixations within 2° of it; no decoder saw the face " +
-      "or its picture. Across held-out human faces, the decoded face picks out the right face among 100 for 38% of them in feature " +
+      "The 100 most-viewed faces of the development split, one per photograph and one per person: a best case, not a random " +
+      "sample. Each face is cut from its picture at its true location (the decoder is told where the face is) and decoded from " +
+      "the fixations within 2° of it. No decoder saw the photograph or any copy of it; some people also appear in other training " +
+      "photographs. Across held-out human faces, the decoded face picks out the right face among 100 for 38% of them in feature " +
       "space (14% with the spikes zeroed), but it does not recover who the person is (2% against 1%), and it can get the species wrong.",
   };
   const liv = {
@@ -3168,7 +3169,7 @@
     grid.classList.add("is-square-pairs");
     grid.replaceChildren(fragment);
     sceneCount.textContent = faces
-      ? `${records.length} faces, most evidence first · face | decoded face`
+      ? `${records.length} most-viewed faces, one per photograph · face | decoded face`
       : `${records.length} most-viewed pictures · picture | diffusion reconstruction`;
     sceneMode.querySelectorAll("button").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.mode === liv.mode));
