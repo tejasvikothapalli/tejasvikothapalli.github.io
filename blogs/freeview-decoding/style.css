@@ -1388,10 +1388,43 @@
 
 .liv-panels {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+  margin: 12px 0;
+}
+
+.liv-panels .visual-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.liv-panels .visual-panel > figcaption {
+  flex: 1 0 auto;
+}
+
+/* Faces: the face and its decoded face only, larger */
+.liv-panels.is-faces {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   max-width: 840px;
-  margin: 12px auto 12px;
+  margin: 12px auto;
+}
+
+.liv-panels.is-faces .liv-map-panel {
+  display: none;
+}
+
+.liv-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.liv-scale i {
+  display: inline-block;
+  width: 34px;
+  height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #000004, #280b54, #65156e, #9f2a63, #d44842, #f57d15, #fac127, #fcffa4);
 }
 
 .liv-panels canvas {
@@ -1417,7 +1450,17 @@
   white-space: nowrap;
 }
 
+@media (max-width: 900px) {
+  .liv-panels {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 680px) {
+  .liv-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .scene-picker .section-heading {
     flex-wrap: wrap;
     align-items: flex-start;
@@ -1429,7 +1472,7 @@
 }
 
 @media (max-width: 460px) {
-  .liv-panels {
+  .liv-panels.is-faces {
     grid-template-columns: 1fr;
   }
 }

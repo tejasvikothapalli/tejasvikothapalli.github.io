@@ -10,7 +10,7 @@
     />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
-    <link rel="stylesheet" href="./style.css?v=20261126-4" />
+    <link rel="stylesheet" href="./style.css?v=20261126-6" />
   </head>
   <body>
     <header class="topbar">
@@ -448,6 +448,27 @@
             </figcaption>
             <canvas id="liv-decoded" width="512" height="512"></canvas>
           </figure>
+          <figure class="visual-panel liv-map-panel">
+            <figcaption>
+              <span class="panel-title">Decoded people</span>
+              <span class="panel-legend"><span class="liv-scale"><i></i>0 to 1</span></span>
+            </figcaption>
+            <canvas class="liv-map" data-map="0" width="384" height="384"></canvas>
+          </figure>
+          <figure class="visual-panel liv-map-panel">
+            <figcaption>
+              <span class="panel-title">Decoded faces</span>
+              <span class="panel-legend"><span class="liv-scale"><i></i>0 to 1</span></span>
+            </figcaption>
+            <canvas class="liv-map" data-map="1" width="384" height="384"></canvas>
+          </figure>
+          <figure class="visual-panel liv-map-panel">
+            <figcaption>
+              <span class="panel-title">Decoded monkeys</span>
+              <span class="panel-legend"><span class="liv-scale"><i></i>0 to 1</span></span>
+            </figcaption>
+            <canvas class="liv-map" data-map="2" width="384" height="384"></canvas>
+          </figure>
         </div>
         <div class="transport" id="liv-transport" aria-label="Playback controls">
           <button id="liv-play" type="button" aria-pressed="false">Play</button>
@@ -489,6 +510,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20261126-10" defer></script>
+    <script src="./app.js?v=20261126-11" defer></script>
   </body>
 </html>

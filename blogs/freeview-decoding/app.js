@@ -86,7 +86,7 @@
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
     { id: "livingstone", label: "Livingstone data", kind: "Macaques V1 to IT" },
   ];
-  const DATA_VERSION = "20261126-3";
+  const DATA_VERSION = "20261126-4";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -3087,19 +3087,30 @@
   const livShare = document.querySelector("#liv-progress-share");
   const livTime = document.querySelector("#liv-progress-time");
   const livNote = document.querySelector("#liv-note");
+  const livPanels = document.querySelector(".liv-panels");
+  const livMapCanvases = [...document.querySelectorAll(".liv-map")];
+  // Inferno, as the paper's maps: decoded read-out on a fixed 0 to 1 scale.
+  const LIV_MAP_STOPS = [
+    [0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99],
+    [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164],
+  ];
   const sceneMode = document.querySelector("#scene-mode");
   const LIV_PLAY_SECONDS = 10;
   const LIV_NOTES = {
     full:
       "Held out: no decoder saw the picture it reconstructs. The frames are decoded from 1%, 3%, 10% and 30% of the fixations on " +
-      "the picture, pooled across monkeys and sessions, by an earlier decoder; the last frame is our current best decoder, using all of them.",
+      "the picture, pooled across monkeys and sessions, by an earlier decoder; the last frame is our current best decoder, using all of them. " +
+      "The maps are the decoded features' read-out of people, faces (human or monkey) and monkeys, on a fixed 0 to 1 scale.",
     faces:
       "The 100 faces with the most fixations near them: a best case, not a random sample. Each face is cut from its picture at its " +
       "true location (the decoder is told where the face is) and decoded from the fixations within 2° of it; no decoder saw the face " +
       "or its picture. Across held-out human faces, the decoded face picks out the right face among 100 for 38% of them in feature " +
       "space (14% with the spikes zeroed), but it does not recover who the person is (2% against 1%), and it can get the species wrong.",
   };
-  const liv = { mode: "full", record: null, original: null, frames: null, position: 1, playing: false, frame: 0, token: 0 };
+  const liv = {
+    mode: "full", record: null, original: null, frames: null, maps: null, dim: null, tile: null,
+    position: 1, playing: false, frame: 0, token: 0,
+  };
 
   function isLivingstone() {
     return state.animal === LIVINGSTONE;
@@ -3172,6 +3183,79 @@
     context.globalAlpha = 1;
   }
 
+  // maps.png: 80 x 48 greyscale; columns = the 5 frames x 16 cells, rows =
+  // people, faces, monkeys x 16 cells; value / 255 = the class read-out.
+  function livReadMaps(image) {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, image.width, image.height).data;
+    const frames = image.width / 16;
+    return [0, 1, 2].map((row) =>
+      Array.from({ length: frames }, (_, frame) => {
+        const values = new Float32Array(256);
+        for (let y = 0; y < 16; y += 1) {
+          for (let x = 0; x < 16; x += 1) {
+            values[y * 16 + x] = pixels[((row * 16 + y) * image.width + frame * 16 + x) * 4] / 255;
+          }
+        }
+        return values;
+      }),
+    );
+  }
+
+  // The picture in grey, dimmed, under each map.
+  function livDimmed(image, size) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(image, 0, 0, size, size);
+    const data = context.getImageData(0, 0, size, size);
+    const pixels = data.data;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const grey = 0.35 * (0.299 * pixels[index] + 0.587 * pixels[index + 1] + 0.114 * pixels[index + 2]);
+      pixels[index] = grey;
+      pixels[index + 1] = grey;
+      pixels[index + 2] = grey;
+    }
+    context.putImageData(data, 0, 0);
+    return canvas;
+  }
+
+  function livMapColor(value) {
+    const x = Math.max(0, Math.min(1, value)) * (LIV_MAP_STOPS.length - 1);
+    const i = Math.min(Math.floor(x), LIV_MAP_STOPS.length - 2);
+    const t = x - i;
+    return LIV_MAP_STOPS[i].map((channel, k) => channel * (1 - t) + LIV_MAP_STOPS[i + 1][k] * t);
+  }
+
+  function livDrawMap(canvas, values) {
+    const context = canvas.getContext("2d");
+    context.drawImage(liv.dim, 0, 0, canvas.width, canvas.height);
+    if (!liv.tile) {
+      liv.tile = document.createElement("canvas");
+      liv.tile.width = 16;
+      liv.tile.height = 16;
+    }
+    const tileContext = liv.tile.getContext("2d");
+    const image = tileContext.createImageData(16, 16);
+    for (let cell = 0; cell < 256; cell += 1) {
+      const value = Math.max(0, Math.min(1, values[cell]));
+      const [r, g, b] = livMapColor(value);
+      image.data[cell * 4] = r;
+      image.data[cell * 4 + 1] = g;
+      image.data[cell * 4 + 2] = b;
+      image.data[cell * 4 + 3] = Math.round(255 * value);
+    }
+    tileContext.putImageData(image, 0, 0);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(liv.tile, 0, 0, canvas.width, canvas.height);
+  }
+
   // Frames are exact at their share of the fixations and cross-fade in between;
   // before the first one the panel fades in from neutral grey, as the other
   // monkeys' model panels do.
@@ -3197,6 +3281,22 @@
       const span = fractions[index + 1] - from;
       const fraction = span > 0 ? (t - from) / span : 1;
       if (fraction > 0) livDrawFrame(context, index + 1, fraction);
+    }
+    if (liv.maps && liv.dim) {
+      const from = index < 0 ? 0 : fractions[index];
+      const next = index + 1 < fractions.length ? fractions[index + 1] : null;
+      const fraction = next == null ? 0 : next > from ? (t - from) / (next - from) : 1;
+      livMapCanvases.forEach((canvas) => {
+        const series = liv.maps[Number(canvas.dataset.map)];
+        const a = index >= 0 ? series[index] : null;
+        const b = next == null ? null : series[index + 1];
+        const values = new Float32Array(256);
+        for (let cell = 0; cell < 256; cell += 1) {
+          const left = a ? a[cell] : 0;
+          values[cell] = b ? left * (1 - fraction) + b[cell] * fraction : left;
+        }
+        livDrawMap(canvas, values);
+      });
     }
     livFrameNote.textContent = index < 0 ? "No fixations decoded yet" : `From ${livPercent(fractions[index])} of the fixations`;
     livShare.textContent = livPercent(t);
@@ -3248,16 +3348,20 @@
         `${record.sessions.toLocaleString()} sessions`;
     livOriginalTitle.textContent = faces ? "Face" : "Static natural scene";
     livTransport.hidden = faces;
+    livPanels.classList.toggle("is-faces", faces);
     livNote.textContent = LIV_NOTES[liv.mode];
     const root = dataRoot();
     try {
-      const [original, frames] = await Promise.all([
+      const [original, frames, maps] = await Promise.all([
         loadImage(`${root}/${record.original}?v=${DATA_VERSION}`),
         loadImage(`${root}/${faces ? record.frames[0] : record.sprite}?v=${DATA_VERSION}`),
+        !faces && record.maps ? loadImage(`${root}/${record.maps}?v=${DATA_VERSION}`) : Promise.resolve(null),
       ]);
       if (token !== liv.token) return;
       liv.original = original;
       liv.frames = frames;
+      liv.maps = maps ? livReadMaps(maps) : null;
+      liv.dim = maps ? livDimmed(original, livMapCanvases[0].width) : null;
       liv.position = 1;
       livTimeline.value = "1000";
       livPaint();
