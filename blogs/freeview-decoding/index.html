@@ -10,7 +10,7 @@
     />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
-    <link rel="stylesheet" href="./style.css?v=20261126-3" />
+    <link rel="stylesheet" href="./style.css?v=20261126-4" />
   </head>
   <body>
     <header class="topbar">
@@ -93,6 +93,11 @@
           of image prior. <strong>Our method sets a new state-of-the-art performance in reconstructing natural images from
           brain activity, across brain recording modalities: fMRI, EEG, MEG and electrophysiology.</strong>
         </p>
+        <p>
+          We also demonstrate this approach in higher-level visual areas, from V1 to inferotemporal cortex, with the
+          Livingstone lab&rsquo;s free-viewing recordings (<a href="https://www.nature.com/articles/s41593-024-01631-5">Xiao et al.,
+          <i>Nature Neuroscience</i>, 2024</a>).
+        </p>
       </aside>
 
       <section class="animal-picker" aria-labelledby="animal-heading">
@@ -115,6 +120,10 @@
               <span id="scene-count">Loading scenes…</span>
               <span class="scene-instruction">Select a scene, then scroll down to watch its reconstruction unfold.</span>
             </p>
+          </div>
+          <div id="scene-mode" class="scene-mode" role="group" aria-label="Show full scenes or faces only" hidden>
+            <button class="quiet-button" type="button" data-mode="full" aria-pressed="true">Full scene</button>
+            <button class="quiet-button" type="button" data-mode="faces" aria-pressed="false">Faces only</button>
           </div>
         </div>
         <div id="scene-grid" class="scene-grid is-collapsed" role="listbox" aria-label="Choose a scene"></div>
@@ -414,6 +423,46 @@
         </div>
       </section>
 
+      <section id="liv-viewer" class="viewer liv-viewer" aria-labelledby="liv-title" hidden>
+        <div class="viewer-heading">
+          <div>
+            <p class="viewer-kicker" id="liv-kicker">Selected scene</p>
+            <h2 id="liv-title">—</h2>
+          </div>
+        </div>
+        <div class="viewer-status" aria-live="polite">
+          <div class="status-row">
+            <strong>Total</strong>
+            <span id="liv-meta">—</span>
+          </div>
+        </div>
+        <div class="liv-panels">
+          <figure class="visual-panel">
+            <figcaption><span class="panel-title" id="liv-original-title">Static natural scene</span></figcaption>
+            <canvas id="liv-original" width="512" height="512"></canvas>
+          </figure>
+          <figure class="visual-panel">
+            <figcaption>
+              <span class="panel-title">Diffusion</span>
+              <span class="panel-legend"><span id="liv-frame-note">—</span></span>
+            </figcaption>
+            <canvas id="liv-decoded" width="512" height="512"></canvas>
+          </figure>
+        </div>
+        <div class="transport" id="liv-transport" aria-label="Playback controls">
+          <button id="liv-play" type="button" aria-pressed="false">Play</button>
+          <label class="scrubber">
+            <span class="sr-only">Viewing time</span>
+            <input id="liv-timeline" type="range" min="0" max="1000" value="1000" />
+          </label>
+          <output aria-live="polite">
+            <span><small>Fixations used</small><b id="liv-progress-share">all</b></span>
+            <span><small>Viewing time</small><b id="liv-progress-time">0:00 / 0:00</b></span>
+          </output>
+        </div>
+        <p id="liv-note" class="liv-note"></p>
+      </section>
+
       <section class="endmatter" aria-label="End matter">
         <div class="endmatter-row" id="acknowledgments">
           <div class="endmatter-title">
@@ -440,6 +489,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20261126-8" defer></script>
+    <script src="./app.js?v=20261126-9" defer></script>
   </body>
 </html>

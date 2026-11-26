@@ -84,8 +84,9 @@
     { id: "monkey-l", label: "Monkey L", kind: "Marmoset V1" },
     { id: "monkey-o", label: "Monkey O", kind: "Macaque LGN" },
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
+    { id: "livingstone", label: "Livingstone data", kind: "Macaques V1 to IT" },
   ];
-  const DATA_VERSION = "20261126-1";
+  const DATA_VERSION = "20261126-2";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -2719,7 +2720,8 @@
     const expanded = !grid.classList.contains("is-collapsed");
     sceneToggle.hidden = total <= 2 * sceneColumns();
     sceneToggle.setAttribute("aria-expanded", String(expanded));
-    sceneToggle.textContent = expanded ? "Show less" : `Show all ${total} scenes`;
+    const noun = isLivingstone() && liv.mode === "faces" ? "faces" : "scenes";
+    sceneToggle.textContent = expanded ? "Show less" : `Show all ${total} ${noun}`;
   }
 
   sceneToggle.addEventListener("click", () => {
@@ -2963,6 +2965,7 @@
 
   document.addEventListener("keydown", (event) => {
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    if (isLivingstone()) return;
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.target instanceof Element && event.target.closest("select, option")) return;
     event.preventDefault();
@@ -3011,6 +3014,7 @@
 
   function animalSummary(manifest, animal) {
     if (!manifest) return "";
+    if (animal === LIVINGSTONE) return livSummary(manifest);
     const parts = [];
     const kind = ANIMALS.find((entry) => entry.id === animal)?.kind;
     if (kind) parts.push(kind);
@@ -3049,7 +3053,9 @@
       ANIMAL_NOTE +
       (state.animal === "monkey-c"
         ? " Monkey C saw an earlier color rendering of the photographs, so they look warmer."
-        : "");
+        : state.animal === LIVINGSTONE
+          ? " The Livingstone data are 13 macaques recorded from V1 to inferotemporal cortex while they freely viewed pictures (Xiao et al., 2024)."
+          : "");
     animalGrid.querySelectorAll(".animal-card").forEach((card) => {
       const selected = card.dataset.animal === state.animal;
       card.classList.toggle("is-selected", selected);
@@ -3059,6 +3065,241 @@
       if (summary) stats.textContent = summary;
     });
   }
+
+  // Livingstone data (Xiao et al., 2024): 13 macaques, V1 to inferotemporal
+  // cortex. A slimmer viewer: the picture and its diffusion reconstruction,
+  // which grows with the share of the picture's fixations decoded (1, 3, 10,
+  // 30 and 100%); "Faces only" shows face crops and their decoded faces.
+  // Data: data/livingstone/manifest.json (summary, modes.full, modes.faces).
+  const LIVINGSTONE = "livingstone";
+  const livViewer = document.querySelector("#liv-viewer");
+  const livKicker = document.querySelector("#liv-kicker");
+  const livTitle = document.querySelector("#liv-title");
+  const livMeta = document.querySelector("#liv-meta");
+  const livOriginal = document.querySelector("#liv-original");
+  const livDecoded = document.querySelector("#liv-decoded");
+  const livOriginalTitle = document.querySelector("#liv-original-title");
+  const livFrameNote = document.querySelector("#liv-frame-note");
+  const livTransport = document.querySelector("#liv-transport");
+  const livPlay = document.querySelector("#liv-play");
+  const livTimeline = document.querySelector("#liv-timeline");
+  const livShare = document.querySelector("#liv-progress-share");
+  const livTime = document.querySelector("#liv-progress-time");
+  const livNote = document.querySelector("#liv-note");
+  const sceneMode = document.querySelector("#scene-mode");
+  const LIV_PLAY_SECONDS = 10;
+  const LIV_NOTES = {
+    full:
+      "Held out: no decoder saw the picture it reconstructs. The reconstruction is decoded from 1%, 3%, 10% and 30% of the " +
+      "fixations on the picture, pooled across monkeys and sessions, and then from all of them with our best decoder.",
+    faces:
+      "Each face is cut from its picture and decoded from the fixations within 2° of it by a decoder trained on faces. " +
+      "Held out: no decoder saw the face, or any copy of its picture.",
+  };
+  const liv = { mode: "full", record: null, original: null, frames: null, position: 1, playing: false, frame: 0, token: 0 };
+
+  function isLivingstone() {
+    return state.animal === LIVINGSTONE;
+  }
+
+  function livSummary(manifest) {
+    const summary = manifest?.summary;
+    if (!summary) return "";
+    return (
+      `${summary.monkeys} macaques · ${summary.sessions.toLocaleString()} sessions · ` +
+      `${summary.areas.join(", ")} · ${summary.pictures.toLocaleString()} pictures`
+    );
+  }
+
+  function livRecords() {
+    return state.manifest?.modes?.[liv.mode]?.scenes ?? [];
+  }
+
+  function livPercent(share) {
+    if (share >= 1) return "all";
+    const percent = share * 100;
+    return `${percent < 10 ? percent.toFixed(1).replace(/\.0$/, "") : Math.round(percent)}%`;
+  }
+
+  function buildLivGrid() {
+    const records = livRecords();
+    const faces = liv.mode === "faces";
+    const fragment = document.createDocumentFragment();
+    records.forEach((record) => {
+      const button = document.createElement("button");
+      button.className = "scene-card";
+      button.type = "button";
+      button.role = "option";
+      button.dataset.slug = record.slug;
+      button.setAttribute("aria-selected", "false");
+      button.setAttribute(
+        "aria-label",
+        faces ? `Face ${record.rank}: face and decoded face` : `Picture ${record.rank}: picture and diffusion reconstruction`,
+      );
+      const image = document.createElement("img");
+      image.src = `${dataRoot()}/${record.thumb}?v=${DATA_VERSION}`;
+      image.alt = "";
+      image.width = 400;
+      image.height = 200;
+      image.loading = "lazy";
+      image.decoding = "async";
+      const label = document.createElement("span");
+      label.textContent = faces
+        ? `#${record.rank} · ${record.fixations.toLocaleString()} fixations`
+        : `#${record.rank} · ${formatViewingTime(record.viewingSeconds)} viewed`;
+      button.append(image, label);
+      button.addEventListener("click", () => selectLivScene(record, { focusViewer: true }));
+      fragment.append(button);
+    });
+    grid.classList.add("is-square-pairs");
+    grid.replaceChildren(fragment);
+    sceneCount.textContent = faces
+      ? `${records.length} faces, most evidence first · face | decoded face`
+      : `${records.length} most-viewed pictures · picture | diffusion reconstruction`;
+    sceneMode.querySelectorAll("button").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.mode === liv.mode));
+    });
+    updateSceneToggle();
+  }
+
+  function livDrawFrame(context, index, alpha) {
+    const size = liv.frames.height;
+    context.globalAlpha = Math.max(0, Math.min(1, alpha));
+    context.drawImage(liv.frames, index * size, 0, size, size, 0, 0, livDecoded.width, livDecoded.height);
+    context.globalAlpha = 1;
+  }
+
+  // Frames are exact at their share of the fixations and cross-fade in between;
+  // before the first one the panel fades in from neutral grey, as the other
+  // monkeys' model panels do.
+  function livPaint() {
+    const record = liv.record;
+    if (!record || !liv.original || !liv.frames) return;
+    livOriginal.getContext("2d").drawImage(liv.original, 0, 0, livOriginal.width, livOriginal.height);
+    const context = livDecoded.getContext("2d");
+    context.fillStyle = "#808080";
+    context.fillRect(0, 0, livDecoded.width, livDecoded.height);
+    if (liv.mode === "faces") {
+      context.drawImage(liv.frames, 0, 0, livDecoded.width, livDecoded.height);
+      livFrameNote.textContent = "Decoded face";
+      return;
+    }
+    const fractions = record.fractions;
+    const t = liv.position;
+    let index = -1;
+    while (index + 1 < fractions.length && fractions[index + 1] <= t) index += 1;
+    if (index >= 0) livDrawFrame(context, index, 1);
+    if (index + 1 < fractions.length) {
+      const from = index < 0 ? 0 : fractions[index];
+      const span = fractions[index + 1] - from;
+      const fraction = span > 0 ? (t - from) / span : 1;
+      if (fraction > 0) livDrawFrame(context, index + 1, fraction);
+    }
+    livFrameNote.textContent = index < 0 ? "No fixations decoded yet" : `From ${livPercent(fractions[index])} of the fixations`;
+    livShare.textContent = livPercent(t);
+    livTime.textContent = `${formatViewingTime(t * record.viewingSeconds)} / ${formatViewingTime(record.viewingSeconds)}`;
+  }
+
+  function livStop() {
+    liv.playing = false;
+    if (liv.frame) cancelAnimationFrame(liv.frame);
+    liv.frame = 0;
+    livPlay.textContent = "Play";
+    livPlay.setAttribute("aria-pressed", "false");
+  }
+
+  function livStart() {
+    if (!liv.record || liv.mode === "faces") return;
+    if (liv.position >= 1) liv.position = 0;
+    liv.playing = true;
+    livPlay.textContent = "Pause";
+    livPlay.setAttribute("aria-pressed", "true");
+    let last = performance.now();
+    const step = (now) => {
+      if (!liv.playing) return;
+      liv.position = Math.min(1, liv.position + (now - last) / (LIV_PLAY_SECONDS * 1000));
+      last = now;
+      livTimeline.value = String(Math.round(liv.position * 1000));
+      livPaint();
+      if (liv.position >= 1) {
+        livStop();
+        return;
+      }
+      liv.frame = requestAnimationFrame(step);
+    };
+    liv.frame = requestAnimationFrame(step);
+  }
+
+  async function selectLivScene(record, { focusViewer = false } = {}) {
+    const token = ++liv.token;
+    livStop();
+    liv.record = record;
+    selectCard(record.slug);
+    const faces = liv.mode === "faces";
+    livKicker.textContent = faces ? "Selected face" : "Selected scene";
+    livTitle.textContent = faces ? `Face ${record.rank}` : `Picture ${record.rank}`;
+    livMeta.textContent = faces
+      ? `${record.species === "human" ? "Human" : "Monkey"} face · ${record.faceDegrees.toFixed(1)}° wide · ` +
+        `${record.fixations.toLocaleString()} fixations within 2° of it`
+      : `${formatViewingTime(record.viewingSeconds)} of viewing · ${record.fixations.toLocaleString()} fixations · ` +
+        `${record.sessions.toLocaleString()} sessions`;
+    livOriginalTitle.textContent = faces ? "Face" : "Static natural scene";
+    livTransport.hidden = faces;
+    livNote.textContent = LIV_NOTES[liv.mode];
+    const root = dataRoot();
+    try {
+      const [original, frames] = await Promise.all([
+        loadImage(`${root}/${record.original}?v=${DATA_VERSION}`),
+        loadImage(`${root}/${faces ? record.frames[0] : record.sprite}?v=${DATA_VERSION}`),
+      ]);
+      if (token !== liv.token) return;
+      liv.original = original;
+      liv.frames = frames;
+      liv.position = 1;
+      livTimeline.value = "1000";
+      livPaint();
+    } catch (error) {
+      console.error(error);
+    }
+    if (focusViewer) livViewer.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function enterLivingstone() {
+    viewer.hidden = true;
+    livViewer.hidden = false;
+    sceneMode.hidden = false;
+    buildLivGrid();
+    const first = livRecords()[0];
+    if (first) selectLivScene(first);
+  }
+
+  function leaveLivingstone() {
+    livStop();
+    livViewer.hidden = true;
+    viewer.hidden = false;
+    sceneMode.hidden = true;
+    grid.classList.remove("is-square-pairs");
+  }
+
+  sceneMode.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-mode]");
+    if (!button || !isLivingstone() || button.dataset.mode === liv.mode) return;
+    liv.mode = button.dataset.mode;
+    buildLivGrid();
+    const first = livRecords()[0];
+    if (first) selectLivScene(first);
+  });
+
+  livPlay.addEventListener("click", () => {
+    if (liv.playing) livStop();
+    else livStart();
+  });
+
+  livTimeline.addEventListener("input", () => {
+    livStop();
+    liv.position = Number(livTimeline.value) / 1000;
+    livPaint();
+  });
 
   // Switching animal keeps the scene you were looking at when that animal has it,
   // and resets everything that is keyed to the old data root.
@@ -3073,6 +3314,12 @@
     const manifest = await loadAnimalManifest(animal);
     state.manifest = manifest;
     markAnimal();
+    if (animal === LIVINGSTONE) {
+      setBusy(false);
+      enterLivingstone();
+      return undefined;
+    }
+    leaveLivingstone();
     buildSceneGrid(manifest);
     const record =
       manifest.scenes.find((scene) => scene.slug === previousSlug) ||
