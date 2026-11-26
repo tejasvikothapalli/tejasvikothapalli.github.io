@@ -130,8 +130,26 @@ function randnFactory(seed = 20260819) {
   };
 }
 
+// One chain per channel: the V1 reconstructions are grey (one channel); the
+// LGN ones are colour, sampled in the paper's opponent space (luminance and two
+// colour-opponent axes), each channel with its own 1/f prior and likelihood,
+// as the ridge decodes them. `state` is the chain being worked on; the chains
+// share the mask, the prior's spectrum and all scratch buffers.
 let state = null;
-let params = { snr: 8, temperature: 1, eta: 0.1, stepsPerFrame: 5 };
+let chains = [];
+const OPPONENT = [
+  [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)],
+  [1 / Math.sqrt(6), 1 / Math.sqrt(6), -2 / Math.sqrt(6)],
+  [1 / Math.sqrt(2), -1 / Math.sqrt(2), 0],
+];
+
+function eachChain(work) {
+  for (const chain of chains) {
+    state = chain;
+    work();
+  }
+}
+let params = { snr: 1.5, temperature: 2, eta: 0.4, stepsPerFrame: 5 };
 let running = false;
 let timer = 0;
 
@@ -299,28 +317,43 @@ function step() {
 }
 
 function frame() {
-  const { npix, mask, image, target, mean } = state;
+  const { npix, mask } = chains[0];
   const rgba = new Uint8ClampedArray(npix * 4);
   let sumSquares = 0;
+  const colour = chains.length === 3;
   for (let i = 0; i < npix; i += 1) {
     if (!mask[i]) continue;
-    const value = image[i] + mean;
-    const level = value < 0 ? 0 : value > 255 ? 255 : value;
     const offset = i * 4;
-    rgba[offset] = level;
-    rgba[offset + 1] = level;
-    rgba[offset + 2] = level;
+    if (colour) {
+      // opponent -> RGB (the opponent basis is orthonormal: RGB = O^T o)
+      const o0 = chains[0].image[i] + chains[0].mean;
+      const o1 = chains[1].image[i] + chains[1].mean;
+      const o2 = chains[2].image[i] + chains[2].mean;
+      for (let channel = 0; channel < 3; channel += 1) {
+        rgba[offset + channel] =
+          o0 * OPPONENT[0][channel] + o1 * OPPONENT[1][channel] + o2 * OPPONENT[2][channel];
+      }
+    } else {
+      const value = chains[0].image[i] + chains[0].mean;
+      const level = value < 0 ? 0 : value > 255 ? 255 : value;
+      rgba[offset] = level;
+      rgba[offset + 1] = level;
+      rgba[offset + 2] = level;
+    }
     rgba[offset + 3] = 255;
-    const d = image[i] - target[i];
-    sumSquares += d * d;
+    for (const chain of chains) {
+      const d = chain.image[i] - chain.target[i];
+      sumSquares += d * d;
+    }
   }
-  const deviation = state.hullPixels ? Math.sqrt(sumSquares / state.hullPixels) : 0;
+  const hullValues = chains[0].hullPixels * chains.length;
+  const deviation = hullValues ? Math.sqrt(sumSquares / hullValues) : 0;
   postMessage(
     {
       type: "frame",
       width: state.nx,
       height: state.ny,
-      iteration: state.iteration,
+      iteration: chains[0].iteration,
       deviation,
       pixels: rgba.buffer,
     },
@@ -334,7 +367,7 @@ function loop() {
     if (!running || !state) return;
     try {
       const steps = Math.max(1, params.stepsPerFrame | 0);
-      for (let i = 0; i < steps; i += 1) step();
+      for (let i = 0; i < steps; i += 1) eachChain(step);
       frame();
     } catch (error) {
       running = false;
@@ -353,19 +386,16 @@ function init(message) {
   let hullPixels = 0;
   for (let i = 0; i < npix; i += 1) if (mask[i]) hullPixels += 1;
 
-  state = {
+  const channels = message.channels === 3 ? 3 : 1;
+  const observation = new Float32Array(message.observation);
+  const shared = {
     nx,
     ny,
     npix,
     mask,
     hullPixels,
-    observation: new Float32Array(message.observation),
     rho2: buildRho2(nx, ny, message.aspect || 1),
     inverseRhoSum: 0,
-    target: new Float32Array(npix),
-    image: new Float32Array(npix),
-    spectrumRe: new Float32Array(npix),
-    spectrumIm: new Float32Array(npix),
     gradientRe: new Float32Array(npix),
     gradientIm: new Float32Array(npix),
     shiftRe: new Float32Array(npix),
@@ -373,14 +403,22 @@ function init(message) {
     scratchRe: new Float32Array(Math.max(nx, ny)),
     scratchIm: new Float32Array(Math.max(nx, ny)),
     randn: randnFactory(),
+  };
+  chains = Array.from({ length: channels }, (_, channel) => ({
+    ...shared,
+    observation: observation.subarray(channel * npix, (channel + 1) * npix),
+    target: new Float32Array(npix),
+    image: new Float32Array(npix),
+    spectrumRe: new Float32Array(npix),
+    spectrumIm: new Float32Array(npix),
     mean: 0,
     variance: 0,
     k: 1,
     iteration: 0,
-  };
+  }));
 
-  calibrate();
-  seedFromTarget();
+  eachChain(calibrate);
+  eachChain(seedFromTarget);
   frame();
   loop();
 }
@@ -395,11 +433,14 @@ self.onmessage = (event) => {
     if (!state) return;
 
     if (message.type === "observation") {
-      state.observation = new Float32Array(message.observation);
-      calibrate();
-      // The chain keeps its current sample and simply follows the newer
+      const observation = new Float32Array(message.observation);
+      chains.forEach((chain, channel) => {
+        chain.observation = observation.subarray(channel * chain.npix, (channel + 1) * chain.npix);
+      });
+      eachChain(calibrate);
+      // The chains keep their current sample and simply follow the newer
       // reconstruction, so scrubbing never restarts the burn-in.
-      if (message.reseed) seedFromTarget();
+      if (message.reseed) eachChain(seedFromTarget);
       if (!running) frame();
       return;
     }
@@ -410,7 +451,7 @@ self.onmessage = (event) => {
     }
 
     if (message.type === "reset") {
-      seedFromTarget();
+      eachChain(seedFromTarget);
       frame();
       return;
     }

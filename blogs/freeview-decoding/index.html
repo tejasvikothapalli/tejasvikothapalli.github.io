@@ -10,7 +10,7 @@
     />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
-    <link rel="stylesheet" href="./style.css?v=20261125-4" />
+    <link rel="stylesheet" href="./style.css?v=20261126-1" />
   </head>
   <body>
     <header class="topbar">
@@ -265,7 +265,7 @@
 
           <figure id="fidelity-panel" class="visual-panel optional-panel fidelity-panel" hidden>
             <figcaption>
-              <span class="panel-title">Reconstruction fidelity</span>
+              <span class="panel-title">Fidelity</span>
               <label class="fidelity-metric">
                 <span class="sr-only">Fidelity metric</span>
                 <select id="fidelity-metric" aria-label="Fidelity metric">
@@ -276,7 +276,7 @@
                 </select>
               </label>
               <span class="panel-legend fidelity-legend">
-                <span id="fidelity-legend-posterior"><i class="legend-line legend-posterior"></i>1/f reconstruction</span>
+                <span id="fidelity-legend-posterior"><i class="legend-line legend-posterior"></i>1/f</span>
                 <span><i class="legend-line legend-transformer"></i>Transformer</span>
                 <span><i class="legend-line legend-diffusion"></i>Diffusion</span>
               </span>
@@ -298,16 +298,16 @@
             <button id="langevin-run" class="quiet-button" type="button" aria-pressed="true">Pause sampling</button>
             <button id="langevin-reset" class="quiet-button" type="button">Reset to reconstruction</button>
             <label class="langevin-slider" title="Step size: how far each update moves down the posterior energy.">
-              <span>&#951; <b id="langevin-eta-value">0.100</b></span>
-              <input id="langevin-eta" type="range" min="0.001" max="1" step="0.001" value="0.1" />
+              <span>&#951; <b id="langevin-eta-value">0.400</b></span>
+              <input id="langevin-eta" type="range" min="0.001" max="1" step="0.001" value="0.4" />
             </label>
             <label class="langevin-slider" title="Temperature: 0 is gradient descent to the MAP, higher values inject more noise and sample more widely.">
-              <span>T <b id="langevin-temperature-value">1.00</b></span>
-              <input id="langevin-temperature" type="range" min="0" max="5" step="0.01" value="1" />
+              <span>T <b id="langevin-temperature-value">2.00</b></span>
+              <input id="langevin-temperature" type="range" min="0" max="5" step="0.01" value="2" />
             </label>
             <label class="langevin-slider" title="Assumed reliability of the reconstruction: sigma_n^2 = var / SNR. Low SNR trusts the 1/f prior more.">
-              <span>SNR <b id="langevin-snr-value">8.0</b></span>
-              <input id="langevin-snr" type="range" min="0.05" max="24" step="0.05" value="8" />
+              <span>SNR <b id="langevin-snr-value">1.5</b></span>
+              <input id="langevin-snr" type="range" min="0.05" max="24" step="0.05" value="1.5" />
             </label>
             <span class="langevin-meter">
               <small>Deviation</small><b id="langevin-deviation">—</b>
@@ -435,6 +435,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20261125-6" defer></script>
+    <script src="./app.js?v=20261126-6" defer></script>
   </body>
 </html>

@@ -84,7 +84,7 @@
     { id: "monkey-o", label: "Monkey O", kind: "Macaque LGN" },
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
   ];
-  const DATA_VERSION = "20261125-6";
+  const DATA_VERSION = "20261126-1";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -344,12 +344,11 @@
     posteriorPanel.hidden = false;
     restorationLegend.title = lgn ? "" : restorationTitle;
     patchToggle.hidden = lgn && !scene.assets?.rfSteps;
-    langevinToggle.hidden = lgn;
+    langevinToggle.hidden = false;
     if (patchToggle.hidden && !patchDrawer.hidden) setPatchDrawerVisible(false);
-    if (lgn && !langevinPanel.hidden) setLangevinVisible(false);
     clickHint.hidden = patchToggle.hidden;
     clickHint.textContent = lgn
-      ? "Click a receptive field (a square) in the original scene, or a cell's row in the raster, to see the patch its spikes decode."
+      ? "Click a receptive field (a square) in the original scene, or its block of cells in the raster (top to bottom like the squares), to see the patch its spikes decode."
       : "Click a point in the original scene to inspect the separate local patch decoder.";
     const windowMs = lgn ? 100 : Number(scene.windowMilliseconds);
     if (Number.isFinite(windowMs)) {
@@ -1289,7 +1288,9 @@
   // Layout is always computed in this fixed coordinate space, so the plot can
   // never reflow with panel width. Only the backing-store resolution tracks the
   // display size, which keeps the type crisp instead of downscaled.
-  const FIDELITY_VIEW = { width: 1280, height: 720 };
+  // 900 virtual units wide: the plot sits in a box the size of a comparison
+  // panel, so its type is set larger relative to the plot than at 1280.
+  const FIDELITY_VIEW = { width: 900, height: 506 };
   const FIDELITY_PLOT = { right: 52, top: 74, bottom: 178 };
   function fidelityRows() {
     return [isLgn() ? "Windows" : "Fixations", "Viewing time"];
@@ -1625,8 +1626,29 @@
     const scene = state.scene;
     const langevin = langevinScratch();
     const context = langevin.source.getContext("2d", { willReadFrequently: true });
+    context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, LANGEVIN_WIDTH, LANGEVIN_HEIGHT);
-    if (state.videoReady && !state.videoSeeking && replayVideo.readyState >= 2) {
+    if (isLgn(scene)) {
+      // LGN: the colour 1/f reconstruction exactly as its panel draws it
+      // (checkpoints cross-faded by position), in the paper's opponent space,
+      // one channel after another.
+      context.setTransform(LANGEVIN_WIDTH / FULL_W, 0, 0, LANGEVIN_HEIGHT / FULL_H, 0, 0);
+      drawModel("ridge", langevin.source);
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      const pixels = context.getImageData(0, 0, LANGEVIN_WIDTH, LANGEVIN_HEIGHT).data;
+      const count = LANGEVIN_WIDTH * LANGEVIN_HEIGHT;
+      const observation = new Float32Array(3 * count);
+      for (let index = 0; index < count; index += 1) {
+        const offset = index * 4;
+        for (let channel = 0; channel < 3; channel += 1) {
+          const row = OPPONENT[channel];
+          observation[channel * count + index] =
+            row[0] * pixels[offset] + row[1] * pixels[offset + 1] + row[2] * pixels[offset + 2];
+        }
+      }
+      return observation;
+    }
+    if (replayFrameReady()) {
       context.drawImage(
         replayVideo,
         2 * scene.frameWidth,
@@ -1693,7 +1715,7 @@
       return null;
     }
     try {
-      langevin.worker = new Worker("./langevin-worker.js");
+      langevin.worker = new Worker(`./langevin-worker.js?v=${DATA_VERSION}`);
     } catch (error) {
       console.error(error);
       langevin.failed = true;
@@ -1760,7 +1782,8 @@
           type: "init",
           width: LANGEVIN_WIDTH,
           height: LANGEVIN_HEIGHT,
-          aspect: state.scene.frameHeight / state.scene.frameWidth,
+          aspect: isLgn() ? FULL_H / FULL_W : state.scene.frameHeight / state.scene.frameWidth,
+          channels: isLgn() ? 3 : 1,
           mask: mask.buffer,
           observation: observation.buffer,
           params: langevinParams(),
@@ -1811,9 +1834,12 @@
     firstRow.forEach((panel) => {
       panel.style.gridColumn = `span ${span}`;
     });
-    secondRow.forEach((panel) => {
-      panel.style.gridColumn =
-        secondRow.length === 1 ? "16 / span 30" : secondRow.length === 2 ? "span 30" : "span 20";
+    // Diagnostics get exactly the size of a comparison box, packed from the
+    // left in a fixed order (density, Langevin, fidelity), so opening one never
+    // shows a box larger than the others.
+    secondRow.forEach((panel, index) => {
+      const start = 1 + index * span;
+      panel.style.gridColumn = `${start} / span ${span}`;
     });
     panelGrid.dataset.columns = String(core + optional.length);
   }
@@ -1827,42 +1853,170 @@
     return record ? { presentation, record } : null;
   }
 
+  // One block of rows per receptive field, the blocks top to bottom in the
+  // order the squares lie on screen (rf-steps presentations[p].fields), each
+  // block its field's cells (a cell feeding two fields appears in both). Only
+  // fields decodable somewhere in the presentation are drawn. The atlas holds
+  // each needed cell once, as a 1-px row (presentations[p].units, at[]).
+  function rfRasterLayout(current) {
+    const geometry = rfRasterGeometry(current);
+    if (!geometry || !state.rfDecoder || !state.images?.rfRasters) return null;
+    if (state.rfLayoutToken !== state.loadToken) {
+      state.rfLayouts = new Map();
+      state.rfLayoutToken = state.loadToken;
+    }
+    const { presentation, record } = geometry;
+    const cached = state.rfLayouts.get(presentation);
+    if (cached) return cached;
+    const name = state.rfMeta.sessions[state.scene.session[current]];
+    const strip = new Map((record.units ?? []).map((unit, index) => [unit, index]));
+    const rows = [];
+    const blocks = [];
+    for (const gid of record.fields ?? []) {
+      const field = state.rfDecoder.fields.get(`${name}:${gid}`);
+      if (!field) continue;
+      const start = rows.length;
+      for (const unit of field.members) if (strip.has(unit)) rows.push(strip.get(unit));
+      if (rows.length > start) blocks.push({ gid, start, end: rows.length });
+    }
+    const layout = { presentation, record, rows, blocks, image: null };
+    state.rfLayouts.set(presentation, layout);
+    return layout;
+  }
+
+  // Pixel geometry of the blocks on a raster of this height: a small gap
+  // between blocks so each field reads as one region.
+  const RF_BLOCK_GAP = 4;
+  function rfBlockPixels(layout, height) {
+    if (layout.pixels && layout.pixels.height === height) return layout.pixels;
+    const count = layout.blocks.length;
+    const gap = count > 1 ? Math.min(RF_BLOCK_GAP, (height * 0.2) / (count - 1)) : 0;
+    const rowHeight = (height - gap * Math.max(0, count - 1)) / Math.max(1, layout.rows.length);
+    const spans = layout.blocks.map((block, index) => {
+      const y0 = block.start * rowHeight + index * gap;
+      return { y0, y1: y0 + (block.end - block.start) * rowHeight };
+    });
+    layout.pixels = { height, gap, rowHeight, spans };
+    return layout.pixels;
+  }
+
+  // The rows drawn once per presentation at the canvas's resolution; spikes
+  // are multiplied in, so rows thinner than a pixel still show theirs.
+  function rfRasterImage(layout, width, height) {
+    if (layout.image && layout.image.width === width && layout.image.height === height) return layout.image;
+    const meta = state.rfMeta;
+    const { rowHeight, spans } = rfBlockPixels(layout, height);
+    const image = document.createElement("canvas");
+    image.width = width;
+    image.height = height;
+    const context = image.getContext("2d");
+    context.fillStyle = "#cbd5e1";
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = "#ffffff";
+    for (const span of spans) context.fillRect(0, span.y0, width, span.y1 - span.y0);
+    const tick = rowHeight >= 2.5 ? rowHeight * 0.7 : rowHeight;
+    context.imageSmoothingEnabled = rowHeight < 1;
+    context.globalCompositeOperation = "multiply";
+    const [column, top] = layout.record.at;
+    layout.blocks.forEach((block, index) => {
+      for (let row = block.start; row < block.end; row += 1) {
+        context.drawImage(
+          state.images.rfRasters,
+          column * meta.rasterWidth,
+          top + layout.rows[row],
+          meta.rasterWidth,
+          1,
+          0,
+          spans[index].y0 + (row - block.start) * rowHeight,
+          width,
+          Math.max(tick, 0.5),
+        );
+      }
+    });
+    layout.image = image;
+    return image;
+  }
+
+  // The field (entry in this step) whose block is at this height of the
+  // raster (0 top, 1 bottom), or -1 if that field is not decodable in this step.
+  function rfEntryAtRasterY(current, fraction) {
+    const layout = rfRasterLayout(current);
+    if (!layout || !layout.rows.length) return -1;
+    const height = canvases.raster.height;
+    const { gap, spans } = rfBlockPixels(layout, height);
+    const y = fraction * height;
+    const index = spans.findIndex((span) => y >= span.y0 - gap / 2 && y < span.y1 + gap / 2);
+    if (index < 0) return -1;
+    const gid = layout.blocks[index].gid;
+    const [from, to] = rfRange(current);
+    for (let entry = from; entry < to; entry += 1) if (state.rfMeta.gid[entry] === gid) return entry;
+    return -1;
+  }
+
+  // Fields are numbered top to bottom, as their squares and blocks lie.
+  function rfFieldRank(current, entry) {
+    const layout = rfRasterLayout(current);
+    const [from, to] = rfRange(current);
+    const decodable = new Set();
+    for (let item = from; item < to; item += 1) decodable.add(state.rfMeta.gid[item]);
+    const order = (layout?.blocks ?? []).map((block) => block.gid).filter((gid) => decodable.has(gid));
+    const rank = order.indexOf(state.rfMeta.gid[entry]);
+    return rank >= 0 ? rank + 1 : entry - from + 1;
+  }
+
   function drawRfRaster(current, entry) {
     const canvas = canvases.raster;
     const context = clearCanvas(canvas, "#f8fafc");
     const meta = state.rfMeta;
-    const atlas = state.images?.rfRasters;
-    const geometry = rfRasterGeometry(current);
-    if (!atlas || !geometry) {
+    const layout = rfRasterLayout(current);
+    if (!layout) {
       rasterCells.textContent = "— cells";
       rasterDuration.textContent = "—";
       return;
     }
-    const { presentation, record } = geometry;
-    context.imageSmoothingEnabled = false;
-    context.drawImage(
-      atlas,
-      (presentation % meta.rasterColumns) * meta.rasterWidth,
-      Math.floor(presentation / meta.rasterColumns) * meta.rasterHeight,
-      meta.rasterWidth,
-      meta.rasterHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-    );
-    const rowHeight = canvas.height / record.cells;
-    const field = entry >= 0 ? rfField(current, entry) : null;
-    if (field) {
-      context.fillStyle = "rgba(245, 158, 11, 0.32)";
-      for (const unit of field.members) {
-        context.fillRect(0, unit * rowHeight, canvas.width, Math.max(1.5, rowHeight));
-      }
-      context.fillStyle = "#d97706";
-      for (const unit of field.members) {
-        context.fillRect(0, unit * rowHeight, 6, Math.max(1.5, rowHeight));
-      }
+    const { record } = layout;
+    if (!layout.rows.length) {
+      context.fillStyle = "#64748b";
+      context.font = "15px system-ui, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("No receptive field the ridge can decode in this presentation", canvas.width / 2, canvas.height / 2);
+      rasterCells.textContent = "0 cells";
+      rasterDuration.textContent = `${((record.bins * meta.binMilliseconds) / 1000).toFixed(1)} s`;
+      return;
     }
+    context.save();
+    context.globalCompositeOperation = "multiply";
+    context.drawImage(rfRasterImage(layout, canvas.width, canvas.height), 0, 0);
+    context.restore();
+    const { spans } = rfBlockPixels(layout, canvas.height);
+    const decodable = new Map();
+    const [from, to] = rfRange(current);
+    for (let item = from; item < to; item += 1) decodable.set(meta.gid[item], item);
+    const chosenGid = entry >= 0 ? meta.gid[entry] : null;
+    const hoverGid = state.rfHover >= from && state.rfHover < to ? meta.gid[state.rfHover] : null;
+    layout.blocks.forEach((block, index) => {
+      const y = spans[index].y0;
+      const h = spans[index].y1 - y;
+      if (block.gid === chosenGid) {
+        context.fillStyle = "rgba(245, 158, 11, 0.3)";
+        context.fillRect(0, y, canvas.width, h);
+        context.fillStyle = "#d97706";
+        context.fillRect(0, y, 6, h);
+      } else if (!decodable.has(block.gid)) {
+        // Not decodable in this window (off screen, on the target, or too few
+        // spikes observed): no square for it in the scene right now.
+        context.fillStyle = "rgba(248, 250, 252, 0.62)";
+        context.fillRect(0, y, canvas.width, h);
+      }
+      if (block.gid === hoverGid && block.gid !== chosenGid) {
+        context.strokeStyle = "#d97706";
+        context.lineWidth = 2;
+        context.setLineDash([5, 4]);
+        context.strokeRect(1, y + 1, canvas.width - 2, Math.max(2, h - 2));
+        context.setLineDash([]);
+      }
+    });
     const x0 = (meta.window[current * 2] / record.bins) * canvas.width;
     const x1 = (meta.window[current * 2 + 1] / record.bins) * canvas.width;
     context.fillStyle = "rgba(37, 99, 235, 0.16)";
@@ -1925,9 +2079,9 @@
     );
     const field = rfField(current, entry);
     patchFixation.textContent =
-      `Window ${(current + 1).toLocaleString()} · receptive field ${entry - from + 1} of ${to - from}: ` +
+      `Window ${(current + 1).toLocaleString()} · receptive field ${rfFieldRank(current, entry)} of ${to - from} from the top: ` +
       `${meta.spikes[entry].toLocaleString()} spikes from ${(field?.members.length ?? 0).toLocaleString()} cells ` +
-      `(shaded rows) · click another square in the scene, or a row in the raster`;
+      `(shaded block) · click another square in the scene, or another block in the raster`;
   }
 
   function drawPatch(current) {
@@ -2068,8 +2222,8 @@
         Promise.all([
           meta,
           loadRfDecoder(animal, meta.fold),
-          loadRfCounts(state.assetPaths.rfCounts, meta.units, meta.steps),
-          loadImage(state.assetPaths.rfRasters),
+          loadRfCounts(`${state.assetPaths.rfCounts}?v=${DATA_VERSION}`, meta.units, meta.steps),
+          loadImage(`${state.assetPaths.rfRasters}?v=${DATA_VERSION}`),
         ]),
       )
       .then(([meta, decoder, counts, rasters]) => {
@@ -2138,6 +2292,41 @@
     }
   }
 
+  // The replay video may be drawn only while it rests on the requested fixation:
+  // mid-seek it still holds the previous frame, which can be thousands of
+  // fixations earlier (a barely started reconstruction) after a long scrub.
+  function replayFrameReady() {
+    return (
+      state.videoReady && !state.videoSeeking && !replayVideo.seeking && replayVideo.readyState >= 2
+    );
+  }
+
+  // A paused video's `seeked` can fire before the decoder presents the new frame
+  // (Safari, and Chromium with hardware decoding), so drawImage at `seeked` may
+  // still return the old one. Repaint once the frame is actually presented
+  // (requestVideoFrameCallback), and again shortly after as a fallback, so a
+  // stale frame never stays on screen.
+  function confirmReplayFrame() {
+    const count = state.count;
+    const scene = state.scene;
+    const repaint = () => {
+      if (state.scene === scene && state.count === count && replayFrameReady()) paint();
+    };
+    if (replayVideo.requestVideoFrameCallback) {
+      if (state.confirmFrameHandle && replayVideo.cancelVideoFrameCallback) {
+        replayVideo.cancelVideoFrameCallback(state.confirmFrameHandle);
+      }
+      state.confirmFrameHandle = replayVideo.requestVideoFrameCallback(() => {
+        state.confirmFrameHandle = 0;
+        repaint();
+      });
+    }
+    window.clearTimeout(state.confirmFrameTimer);
+    state.confirmFrameTimer = window.setTimeout(() => {
+      if (!state.playing) repaint();
+    }, 200);
+  }
+
   function paint() {
     if (!state.scene || !state.images) return;
     const current = state.count - 1;
@@ -2145,7 +2334,7 @@
     drawTruth(current);
     if (!lgn) {
       let evidenceContext;
-      if (state.videoReady && !state.videoSeeking && replayVideo.readyState >= 2) {
+      if (replayFrameReady()) {
         evidenceContext = drawReplaySlice(canvases.evidence, 1);
         drawReplaySlice(canvases.posterior, 2);
       } else {
@@ -2184,7 +2373,7 @@
     }
 
     if (!patchDrawer.hidden) drawPatch(current);
-    if (!lgn && !langevinPanel.hidden) syncLangevin();
+    if (!langevinPanel.hidden) syncLangevin();
     drawFidelity();
     timeline.value = String(state.count);
     progressFixation.textContent = `${state.count.toLocaleString()} / ${state.scene.total.toLocaleString()}`;
@@ -2200,7 +2389,9 @@
     if (state.videoReady) {
       state.pendingSeekCount = next;
       const target = next / state.scene.replayFps + 0.0001;
-      if (Math.abs(replayVideo.currentTime - target) < 0.0005) {
+      // currentTime already reports a seek's target while it is under way, so
+      // "already there" also needs the video to have finished seeking.
+      if (!replayVideo.seeking && Math.abs(replayVideo.currentTime - target) < 0.0005) {
         state.videoSeeking = false;
         state.pendingSeekCount = null;
       } else {
@@ -2319,12 +2510,16 @@
     if (token !== state.loadToken) return;
     state.videoReady = true;
     replayVideo.playbackRate = state.speed;
-    state.pendingSeekCount = count;
+    // Seek to where the viewer is now: the scrubber may have moved while the
+    // replay downloaded (the sprites drew those positions meanwhile).
+    const target = state.scene ? state.count : count;
+    state.pendingSeekCount = target;
     const seeked = waitForVideo("seeked");
-    replayVideo.currentTime = count / state.scene.replayFps + 0.0001;
+    replayVideo.currentTime = target / state.scene.replayFps + 0.0001;
     await seeked;
     if (token !== state.loadToken) return;
-    state.videoSeeking = false;
+    // A later seek (the viewer scrubbing) clears this in its own `seeked`.
+    if (!replayVideo.seeking) state.videoSeeking = false;
   }
 
   async function readWithProgress(response, token) {
@@ -2541,37 +2736,41 @@
     const [x, y] = viewPoint(canvases.truth, event);
     const hover = rfEntryAtPoint(state.count - 1, x, y);
     canvases.truth.classList.toggle("over-field", hover >= 0);
-    if (hover !== state.rfHover) {
-      state.rfHover = hover;
-      drawTruth(state.count - 1);
-    }
+    setRfHover(hover);
   });
   canvases.truth.addEventListener("pointerleave", () => {
-    if (state.rfHover < 0) return;
-    state.rfHover = -1;
     canvases.truth.classList.remove("over-field");
-    if (state.scene) drawTruth(state.count - 1);
+    setRfHover(-1);
   });
 
-  // LGN: a click on a cell's row selects a receptive field that cell belongs to.
-  function rfEntryAtRasterRow(event) {
+  // Hovering a square outlines its block in the raster, and hovering a block
+  // outlines its square in the scene.
+  function setRfHover(entry) {
+    if (entry === state.rfHover) return;
+    state.rfHover = entry;
+    if (!state.scene || !isLgn()) return;
     const current = state.count - 1;
-    const geometry = rfRasterGeometry(current);
-    if (!geometry || !state.rfDecoder) return -1;
+    drawTruth(current);
+    if (!patchDrawer.hidden && state.rfMeta) drawRfRaster(current, rfCurrentEntry(current));
+  }
+
+  // LGN: a click on a field's block of rows selects that field.
+  function rfEntryAtRasterRow(event) {
+    if (!state.rfMeta) return -1;
     const bounds = canvases.raster.getBoundingClientRect();
-    const unit = Math.floor(((event.clientY - bounds.top) / bounds.height) * geometry.record.cells);
-    const [from, to] = rfRange(current);
-    let best = -1;
-    for (let entry = from; entry < to; entry += 1) {
-      const field = rfField(current, entry);
-      if (!field || !field.members.includes(unit)) continue;
-      if (best < 0 || state.rfMeta.spikes[entry] > state.rfMeta.spikes[best]) best = entry;
-    }
-    return best;
+    if (!bounds.height) return -1;
+    return rfEntryAtRasterY(state.count - 1, (event.clientY - bounds.top) / bounds.height);
   }
 
   canvases.raster.addEventListener("pointermove", (event) => {
-    canvases.raster.classList.toggle("over-field", isLgn() && rfEntryAtRasterRow(event) >= 0);
+    if (!isLgn()) return;
+    const entry = rfEntryAtRasterRow(event);
+    canvases.raster.classList.toggle("over-field", entry >= 0);
+    setRfHover(entry);
+  });
+  canvases.raster.addEventListener("pointerleave", () => {
+    canvases.raster.classList.remove("over-field");
+    if (isLgn()) setRfHover(-1);
   });
   canvases.raster.addEventListener("click", (event) => {
     if (!isLgn() || !state.rfMeta) return;
@@ -2618,12 +2817,16 @@
 
   replayVideo.addEventListener("seeked", () => {
     if (!state.videoReady || !state.scene) return;
+    // An earlier seek finished after a newer one started: the video does not
+    // hold the requested frame yet, and the newer seek's `seeked` will paint.
+    if (replayVideo.seeking) return;
     const next = state.pendingSeekCount ?? Math.round(replayVideo.currentTime * state.scene.replayFps);
     state.pendingSeekCount = null;
     state.count = Math.max(0, Math.min(state.scene.total, next));
     state.fractionalCount = state.count;
     state.videoSeeking = false;
     paint();
+    confirmReplayFrame();
   });
 
   replayVideo.addEventListener("timeupdate", () => {

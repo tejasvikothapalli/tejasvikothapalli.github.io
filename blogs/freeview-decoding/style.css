@@ -296,6 +296,9 @@
 .panel-grid {
   display: grid;
   grid-template-columns: repeat(60, minmax(0, 1fr));
+  /* every row as tall as the tallest, so a diagnostic in the second row is
+     exactly the size of a comparison box */
+  grid-auto-rows: 1fr;
   gap: 8px;
 }
 
