@@ -678,6 +678,23 @@
     sceneMagnifier.hidden = true;
   }
 
+  // The lens is about a third of the scene panel's shorter side (48-112 px),
+  // so it never covers most of a small panel; its canvas matches its size on
+  // screen (times the pixel ratio) so the magnified pixels stay crisp.
+  function sizeSceneMagnifier(bounds) {
+    const side = Math.round(Math.max(48, Math.min(112, Math.min(bounds.width, bounds.height) * 0.34)));
+    if (state.magnifierSide !== side) {
+      state.magnifierSide = side;
+      sceneMagnifier.style.width = `${side}px`;
+      sceneMagnifier.style.height = `${side}px`;
+    }
+    const backing = Math.round(side * Math.min(window.devicePixelRatio || 1, 2));
+    if (sceneMagnifierCanvas.width !== backing) {
+      sceneMagnifierCanvas.width = backing;
+      sceneMagnifierCanvas.height = backing;
+    }
+  }
+
   function updateSceneMagnifier(event) {
     if (
       event.pointerType === "touch" ||
@@ -693,6 +710,7 @@
     const canvas = canvases.truth;
     const bounds = canvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
+    sizeSceneMagnifier(bounds);
     const [canvasX, canvasY] = viewPoint(canvas, event);
     const image = state.images.original;
     const sourceScaleX = image.naturalWidth / FULL_W;
@@ -737,7 +755,7 @@
     const stageBounds = stage.getBoundingClientRect();
     const cursorX = event.clientX - stageBounds.left;
     const cursorY = event.clientY - stageBounds.top;
-    const gap = 16;
+    const gap = Math.round(sceneMagnifier.offsetWidth * 0.14);
     const lensWidth = sceneMagnifier.offsetWidth;
     const lensHeight = sceneMagnifier.offsetHeight;
     let left = cursorX + gap;

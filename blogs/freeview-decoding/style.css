@@ -447,13 +447,13 @@
 }
 
 .scene-magnifier::before {
-  width: 13px;
+  width: 12%;
   height: 1px;
 }
 
 .scene-magnifier::after {
   width: 1px;
-  height: 13px;
+  height: 12%;
 }
 
 .screen-scale {
