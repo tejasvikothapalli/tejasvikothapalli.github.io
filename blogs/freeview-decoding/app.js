@@ -4,6 +4,7 @@
   const grid = document.querySelector("#scene-grid");
   const animalGrid = document.querySelector("#animal-grid");
   const sceneCount = document.querySelector("#scene-count");
+  const sceneToggle = document.querySelector("#scene-toggle");
   const viewer = document.querySelector("#viewer");
   const viewerTitle = document.querySelector("#viewer-title");
   const loadStatus = document.querySelector("#load-status");
@@ -2684,7 +2685,36 @@
     grid.replaceChildren(fragment);
     sceneCount.textContent =
       `${records.length} scenes · photograph | diffusion reconstruction`;
+    updateSceneToggle();
   }
+
+  // Two rows of scenes unless the reader asks for all of them; the choice
+  // holds across monkeys. Collapsing scrolls the scenes back into view so the
+  // page does not jump past them.
+  function sceneColumns() {
+    const columns = getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length;
+    return Math.max(1, columns);
+  }
+
+  function updateSceneToggle() {
+    const total = grid.querySelectorAll(".scene-card").length;
+    const expanded = !grid.classList.contains("is-collapsed");
+    sceneToggle.hidden = total <= 2 * sceneColumns();
+    sceneToggle.setAttribute("aria-expanded", String(expanded));
+    sceneToggle.textContent = expanded ? "Show less" : `Show all ${total} scenes`;
+  }
+
+  sceneToggle.addEventListener("click", () => {
+    const collapse = !grid.classList.contains("is-collapsed");
+    grid.classList.toggle("is-collapsed", collapse);
+    updateSceneToggle();
+    if (collapse) {
+      const heading = document.querySelector(".scene-picker");
+      if (heading.getBoundingClientRect().top < 0) heading.scrollIntoView({ block: "start" });
+    }
+  });
+
+  window.addEventListener("resize", updateSceneToggle);
 
   function stopArrowHold() {
     if (state.arrowTimer) window.clearTimeout(state.arrowTimer);

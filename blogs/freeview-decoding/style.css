@@ -142,6 +142,24 @@
   row-gap: 16px;
 }
 
+/* Two rows of scenes by default (Show all / Show less), so the viewer below
+   stays within reach; the counts follow the grid's columns at each width. */
+.scene-grid.is-collapsed > .scene-card:nth-child(n + 9) {
+  display: none;
+}
+
+.scene-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.scene-more .quiet-button {
+  min-height: 30px;
+  padding: 4px 14px;
+  font-size: 0.88rem;
+}
+
 .scene-card,
 .quiet-button,
 .transport button,
@@ -962,6 +980,10 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .scene-grid.is-collapsed > .scene-card:nth-child(n + 7) {
+    display: none;
+  }
+
   .panel-grid,
   .panel-grid[data-columns] {
     grid-template-columns: 1fr;
@@ -1005,6 +1027,10 @@
 @media (max-width: 460px) {
   .scene-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scene-grid.is-collapsed > .scene-card:nth-child(n + 5) {
+    display: none;
   }
 
   .method {
