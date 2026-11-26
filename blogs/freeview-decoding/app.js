@@ -84,7 +84,7 @@
     { id: "monkey-o", label: "Monkey O", kind: "Macaque LGN" },
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
   ];
-  const DATA_VERSION = "20261125-5";
+  const DATA_VERSION = "20261125-6";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -95,6 +95,10 @@
     assetPaths: null,
     patchPromise: null,
     rfMeta: null,
+    rfCounts: null,
+    rfDecoder: null,
+    rfChoice: null,
+    rfHover: -1,
     replayAbort: null,
     replayObjectUrl: null,
     videoReady: false,
@@ -316,7 +320,7 @@
     fidelityToggle.disabled = false;
 
     const hasPatchDecoder = isLgn(scene)
-      ? Boolean(scene.assets?.rfPatches && scene.assets?.rfPatchSprite && scene.assets?.rfRasters)
+      ? Boolean(scene.assets?.rfSteps && scene.assets?.rfCounts && scene.assets?.rfRasters)
       : Boolean(scene.assets?.truthPatches && scene.assets?.trialRasters);
     patchPending.hidden = hasPatchDecoder;
     if (!hasPatchDecoder) patchPending.replaceChildren(...pendingMessage("Patch decoder"));
@@ -339,13 +343,13 @@
     evidencePanel.hidden = false;
     posteriorPanel.hidden = false;
     restorationLegend.title = lgn ? "" : restorationTitle;
-    patchToggle.hidden = lgn && !scene.assets?.rfPatches;
+    patchToggle.hidden = lgn && !scene.assets?.rfSteps;
     langevinToggle.hidden = lgn;
     if (patchToggle.hidden && !patchDrawer.hidden) setPatchDrawerVisible(false);
     if (lgn && !langevinPanel.hidden) setLangevinVisible(false);
     clickHint.hidden = patchToggle.hidden;
     clickHint.textContent = lgn
-      ? "Click a receptive field in the original scene to inspect the patch the ridge decodes from its spikes."
+      ? "Click a receptive field (a square) in the original scene, or a cell's row in the raster, to see the patch its spikes decode."
       : "Click a point in the original scene to inspect the separate local patch decoder.";
     const windowMs = lgn ? 100 : Number(scene.windowMilliseconds);
     if (Number.isFinite(windowMs)) {
@@ -516,10 +520,73 @@
     return bestCovering >= 0 ? bestCovering : nearest;
   }
 
-  // LGN: every replay step has one decoded patch (rf-patches.json). A click
-  // picks, among the steps' patches covering the point, the one decoded best
-  // (lowest error), else the nearest, and the replay jumps to that step.
-  function bestRfPatchAtPoint(x, y) {
+  // LGN patch decoder ------------------------------------------------------
+  //
+  // rf-steps.json lists, for every replay step, the receptive fields the
+  // paper's ridge can decode in that 100-ms window (gid, centre, spikes). The
+  // ridge, its calibration and the colour transform are one linear map per
+  // field (rf-decoders-f<fold>.bin), so the browser decodes any field from the
+  // step's spike counts (rf-counts.png). Default field: the most spikes.
+
+  function rfRange(step) {
+    const meta = state.rfMeta;
+    if (!meta || step < 0 || step >= meta.steps) return [0, 0];
+    return [meta.entryStart[step], meta.entryStart[step + 1]];
+  }
+
+  function rfDefaultEntry(step) {
+    const meta = state.rfMeta;
+    const [from, to] = rfRange(step);
+    let best = -1;
+    for (let entry = from; entry < to; entry += 1) {
+      if (best < 0 || meta.spikes[entry] > meta.spikes[best]) best = entry;
+    }
+    return best;
+  }
+
+  // The chosen field while its session lasts, else the default.
+  function rfCurrentEntry(step) {
+    const meta = state.rfMeta;
+    const choice = state.rfChoice;
+    if (choice && state.scene.session[step] === choice.session) {
+      const [from, to] = rfRange(step);
+      for (let entry = from; entry < to; entry += 1) if (meta.gid[entry] === choice.gid) return entry;
+    }
+    return rfDefaultEntry(step);
+  }
+
+  function rfChoose(step, entry) {
+    state.rfChoice = entry < 0 ? null : { session: state.scene.session[step], gid: state.rfMeta.gid[entry] };
+  }
+
+  // The field whose square contains the point in this step (-1 if none). The
+  // squares are small on screen, so a click within 14 screen pixels of a
+  // square's centre counts as on it.
+  function rfEntryAtPoint(step, x, y) {
+    const meta = state.rfMeta;
+    if (!meta) return -1;
+    const bounds = canvases.truth.getBoundingClientRect();
+    const displayPerScreen = bounds.width ? (state.view?.w ?? FULL_W) / bounds.width : 1;
+    const half = Math.max(meta.sidePixels / 2, 14 * displayPerScreen);
+    const [from, to] = rfRange(step);
+    let found = -1;
+    let foundDistance = Infinity;
+    for (let entry = from; entry < to; entry += 1) {
+      const dx = meta.x[entry] / 10 - x;
+      const dy = meta.y[entry] / 10 - y;
+      if (Math.abs(dx) > half || Math.abs(dy) > half) continue;
+      const distance = dx * dx + dy * dy;
+      if (distance < foundDistance) {
+        found = entry;
+        foundDistance = distance;
+      }
+    }
+    return found;
+  }
+
+  // Anywhere else: the step whose default field, covering the point, was
+  // decoded best (lowest error), else the nearest (the V1 rule).
+  function bestRfStepAtPoint(x, y) {
     const meta = state.rfMeta;
     if (!meta) return -1;
     const half = meta.sidePixels / 2;
@@ -528,9 +595,10 @@
     let nearest = -1;
     let nearestDistance = Infinity;
     for (let step = 0; step < meta.steps; step += 1) {
-      if (meta.patch[step] < 0) continue;
-      const dx = meta.x[step] / 10 - x;
-      const dy = meta.y[step] / 10 - y;
+      if (meta.error[step] < 0) continue;
+      const entry = rfDefaultEntry(step);
+      const dx = meta.x[entry] / 10 - x;
+      const dy = meta.y[entry] / 10 - y;
       const distance = dx * dx + dy * dy;
       if (distance < nearestDistance) {
         nearest = step;
@@ -544,6 +612,68 @@
     return best >= 0 ? best : nearest;
   }
 
+  function rfField(step, entry) {
+    const decoder = state.rfDecoder;
+    if (!decoder) return null;
+    const name = state.rfMeta.sessions[state.scene.session[step]];
+    return decoder.fields.get(`${name}:${state.rfMeta.gid[entry]}`) ?? null;
+  }
+
+  const OPPONENT = [
+    [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)],
+    [1 / Math.sqrt(6), 1 / Math.sqrt(6), -2 / Math.sqrt(6)],
+    [1 / Math.sqrt(2), -1 / Math.sqrt(2), 0],
+  ];
+
+  // The paper's ridge for one field, in float64: d = (x - xmean) @ coef with
+  // x the paper's float32 log1p of each cell's spike count; the two-gain
+  // calibration (DC and the rest, per opponent channel) around the mean patch;
+  // opponent -> RGB; clip. Fields with a zero gain are stored in float64.
+  function rfDecode(step, entry) {
+    const field = rfField(step, entry);
+    if (!field) return null;
+    const meta = state.rfMeta;
+    const decoder = state.rfDecoder;
+    const data = field.f64 ? decoder.data64 : decoder.data32;
+    const members = field.members;
+    const pixels = meta.patchSize * meta.patchSize;
+    const width = pixels * 3;
+    const coef = field.offset;
+    const xmean = coef + members.length * width;
+    const mean = xmean + members.length;
+    const gains = mean + width;
+    const x = new Float64Array(members.length);
+    for (let index = 0; index < members.length; index += 1) {
+      x[index] = decoder.log1p[state.rfCounts[step * meta.units + members[index]]] - data[xmean + index];
+    }
+    const d = new Float64Array(width);
+    for (let column = 0; column < width; column += 1) {
+      let value = 0;
+      for (let index = 0; index < members.length; index += 1) value += x[index] * data[coef + index * width + column];
+      d[column] = value;
+    }
+    const dc = [0, 0, 0];
+    for (let column = 0; column < width; column += 1) dc[column % 3] += d[column] / pixels;
+    const out = new Uint8ClampedArray(pixels * 4);
+    for (let pixel = 0; pixel < pixels; pixel += 1) {
+      const opponent = [0, 1, 2].map((channel) => {
+        const column = pixel * 3 + channel;
+        return (
+          data[mean + column] +
+          dc[channel] / Math.max(data[gains + channel], 1e-8) +
+          (d[column] - dc[channel]) / Math.max(data[gains + 3 + channel], 1e-8)
+        );
+      });
+      for (let rgb = 0; rgb < 3; rgb += 1) {
+        const value =
+          opponent[0] * OPPONENT[0][rgb] + opponent[1] * OPPONENT[1][rgb] + opponent[2] * OPPONENT[2][rgb];
+        out[pixel * 4 + rgb] = Math.round(Math.min(1, Math.max(0, value)) * 255);
+      }
+      out[pixel * 4 + 3] = 255;
+    }
+    return out;
+  }
+
   function hideSceneMagnifier() {
     sceneMagnifier.hidden = true;
   }
@@ -552,7 +682,7 @@
     if (
       event.pointerType === "touch" ||
       !state.scene ||
-      (isLgn() && !state.scene.assets?.rfPatches) ||
+      (isLgn() && !state.scene.assets?.rfSteps) ||
       !state.images?.original ||
       viewer.getAttribute("aria-busy") === "true"
     ) {
@@ -700,27 +830,53 @@
 
     const [x, y] = roundedPoint(scene.gaze, current);
     if (isLgn(scene)) {
-      drawLgnTiles(context, current);
-      drawSelectedRf(context, current);
+      updateLgnLegend();
+      if (rfFieldsShown()) drawRfFields(context, current);
+      else drawLgnTiles(context, current);
     } else {
       drawPatchWindow(context, current);
     }
     drawGaze(context, x, y);
   }
 
-  function drawSelectedRf(context, current) {
+  function rfFieldsShown() {
+    return Boolean(state.rfMeta && state.rfDecoder && !patchDrawer.hidden);
+  }
+
+  function updateLgnLegend() {
+    const text = rfFieldsShown()
+      ? `${Number(state.scene.ridgePatchDegrees || 0.75)}° decodable receptive fields`
+      : `${Number(state.scene.tileDegrees || 1)}° receptive fields`;
+    if (patchLegend.textContent !== text) patchLegend.textContent = text;
+  }
+
+  // With the decoder open: every decodable field of this window as a square
+  // (clickable), the hovered one in white, the decoded one in white and cyan.
+  function drawRfFields(context, current) {
     const meta = state.rfMeta;
-    if (!meta || patchDrawer.hidden || current < 0 || meta.patch[current] < 0) return;
+    if (current < 0) return;
     const side = meta.sidePixels;
-    const x = meta.x[current] / 10 - side / 2;
-    const y = meta.y[current] / 10 - side / 2;
+    const chosen = rfCurrentEntry(current);
+    const [from, to] = rfRange(current);
     context.save();
-    context.strokeStyle = "#ffffff";
-    context.lineWidth = 7;
-    context.strokeRect(x, y, side, side);
-    context.strokeStyle = colors.gaze;
-    context.lineWidth = 3.5;
-    context.strokeRect(x, y, side, side);
+    for (let entry = from; entry < to; entry += 1) {
+      if (entry === chosen) continue;
+      const x = meta.x[entry] / 10 - side / 2;
+      const y = meta.y[entry] / 10 - side / 2;
+      context.strokeStyle = entry === state.rfHover ? "#ffffff" : colors.patch;
+      context.lineWidth = entry === state.rfHover ? 4 : 2.5;
+      context.strokeRect(x, y, side, side);
+    }
+    if (chosen >= 0) {
+      const x = meta.x[chosen] / 10 - side / 2;
+      const y = meta.y[chosen] / 10 - side / 2;
+      context.strokeStyle = "#ffffff";
+      context.lineWidth = 8;
+      context.strokeRect(x, y, side, side);
+      context.strokeStyle = colors.gaze;
+      context.lineWidth = 4;
+      context.strokeRect(x, y, side, side);
+    }
     context.restore();
   }
 
@@ -1662,18 +1818,27 @@
     panelGrid.dataset.columns = String(core + optional.length);
   }
 
-  function drawRfRaster(current) {
+  // Rows are the session's units, so a field's cells are rows: they are
+  // shaded across the presentation, and the decoded window is the blue band.
+  function rfRasterGeometry(current) {
+    const meta = state.rfMeta;
+    const presentation = current >= 0 ? state.scene.presentation[current] : -1;
+    const record = meta?.presentations?.[presentation];
+    return record ? { presentation, record } : null;
+  }
+
+  function drawRfRaster(current, entry) {
     const canvas = canvases.raster;
     const context = clearCanvas(canvas, "#f8fafc");
     const meta = state.rfMeta;
     const atlas = state.images?.rfRasters;
-    const presentation = current >= 0 ? state.scene.presentation[current] : -1;
-    const record = meta?.presentations?.[presentation];
-    if (!atlas || !record) {
+    const geometry = rfRasterGeometry(current);
+    if (!atlas || !geometry) {
       rasterCells.textContent = "— cells";
       rasterDuration.textContent = "—";
       return;
     }
+    const { presentation, record } = geometry;
     context.imageSmoothingEnabled = false;
     context.drawImage(
       atlas,
@@ -1686,9 +1851,21 @@
       canvas.width,
       canvas.height,
     );
+    const rowHeight = canvas.height / record.cells;
+    const field = entry >= 0 ? rfField(current, entry) : null;
+    if (field) {
+      context.fillStyle = "rgba(245, 158, 11, 0.32)";
+      for (const unit of field.members) {
+        context.fillRect(0, unit * rowHeight, canvas.width, Math.max(1.5, rowHeight));
+      }
+      context.fillStyle = "#d97706";
+      for (const unit of field.members) {
+        context.fillRect(0, unit * rowHeight, 6, Math.max(1.5, rowHeight));
+      }
+    }
     const x0 = (meta.window[current * 2] / record.bins) * canvas.width;
     const x1 = (meta.window[current * 2 + 1] / record.bins) * canvas.width;
-    context.fillStyle = "rgba(37, 99, 235, 0.14)";
+    context.fillStyle = "rgba(37, 99, 235, 0.16)";
     context.fillRect(x0, 0, Math.max(2, x1 - x0), canvas.height);
     context.strokeStyle = "#2563eb";
     context.lineWidth = 3;
@@ -1705,40 +1882,40 @@
     truthContext.imageSmoothingEnabled = false;
     decodedContext.imageSmoothingEnabled = false;
     const meta = state.rfMeta;
-    if (!meta || !state.images?.rfPatchSprite || !state.images?.rfRasters) {
-      drawRfRaster(-1);
-      patchFixation.textContent = "Loading patches…";
+    if (!meta || !state.rfDecoder || !state.rfCounts || !state.images?.rfRasters) {
+      drawRfRaster(-1, -1);
+      patchFixation.textContent = state.patchPromise ? "Loading the decoders…" : "Patch decoder unavailable";
       return;
     }
-    drawRfRaster(current);
     if (current < 0) {
-      patchFixation.textContent = "Play or click a receptive field";
+      drawRfRaster(-1, -1);
+      patchFixation.textContent = "Play, or click a receptive field in the scene";
       return;
     }
-    const index = meta.patch[current];
-    if (index < 0) {
-      patchFixation.textContent = `Window ${(current + 1).toLocaleString()} · the ridge has no decoder for this session`;
+    const entry = rfCurrentEntry(current);
+    drawRfRaster(current, entry);
+    const [from, to] = rfRange(current);
+    if (entry < 0) {
+      patchFixation.textContent = `Window ${(current + 1).toLocaleString()} · no receptive field the ridge can decode in this window`;
       return;
     }
-    const size = meta.patchSize;
-    decodedContext.drawImage(
-      state.images.rfPatchSprite,
-      (index % meta.patchColumns) * size,
-      Math.floor(index / meta.patchColumns) * size,
-      size,
-      size,
-      0,
-      0,
-      decodedCanvas.width,
-      decodedCanvas.height,
-    );
+    const pixels = rfDecode(current, entry);
+    if (pixels) {
+      if (!state.rfScratch) {
+        state.rfScratch = document.createElement("canvas");
+        state.rfScratch.width = meta.patchSize;
+        state.rfScratch.height = meta.patchSize;
+      }
+      state.rfScratch.getContext("2d").putImageData(new ImageData(pixels, meta.patchSize, meta.patchSize), 0, 0);
+      decodedContext.drawImage(state.rfScratch, 0, 0, decodedCanvas.width, decodedCanvas.height);
+    }
     const side = meta.sidePixels;
     const scaleX = state.images.original.naturalWidth / FULL_W;
     const scaleY = state.images.original.naturalHeight / FULL_H;
     truthContext.drawImage(
       state.images.original,
-      (meta.x[current] / 10 - side / 2) * scaleX,
-      (meta.y[current] / 10 - side / 2) * scaleY,
+      (meta.x[entry] / 10 - side / 2) * scaleX,
+      (meta.y[entry] / 10 - side / 2) * scaleY,
       side * scaleX,
       side * scaleY,
       0,
@@ -1746,9 +1923,11 @@
       truthCanvas.width,
       truthCanvas.height,
     );
+    const field = rfField(current, entry);
     patchFixation.textContent =
-      `Window ${(current + 1).toLocaleString()} · receptive field with the most spikes: ` +
-      `${meta.spikes[current].toLocaleString()} spikes from ${meta.cells[current].toLocaleString()} cells (outlined in the scene)`;
+      `Window ${(current + 1).toLocaleString()} · receptive field ${entry - from + 1} of ${to - from}: ` +
+      `${meta.spikes[entry].toLocaleString()} spikes from ${(field?.members.length ?? 0).toLocaleString()} cells ` +
+      `(shaded rows) · click another square in the scene, or a row in the raster`;
   }
 
   function drawPatch(current) {
@@ -1819,33 +1998,92 @@
     patchFixation.textContent = `Fixation ID ${state.scene.fixation[current].toLocaleString()}`;
   }
 
+  const rfDecoderCache = new Map();
+
+  function loadRfDecoder(animal, fold) {
+    const key = `${animal}:${fold}`;
+    if (!rfDecoderCache.has(key)) {
+      const base = `${dataRoot(animal)}/rf-decoders-f${fold}`;
+      const promise = Promise.all([
+        fetch(`${base}.json?v=${DATA_VERSION}`).then((response) => {
+          if (!response.ok) throw new Error(`Decoder index returned ${response.status}`);
+          return response.json();
+        }),
+        fetch(`${base}.bin?v=${DATA_VERSION}`).then((response) => {
+          if (!response.ok) throw new Error(`Decoders returned ${response.status}`);
+          return response.arrayBuffer();
+        }),
+        fetch(`${base}.f64.bin?v=${DATA_VERSION}`).then((response) => {
+          if (!response.ok) throw new Error(`Decoders returned ${response.status}`);
+          return response.arrayBuffer();
+        }),
+      ]).then(([index, buffer, buffer64]) => {
+        const fields = new Map();
+        for (const [session, list] of Object.entries(index.sessions)) {
+          for (const field of list) fields.set(`${session}:${field.gid}`, field);
+        }
+        return {
+          fields,
+          data32: new Float32Array(buffer),
+          data64: new Float64Array(buffer64),
+          log1p: Float64Array.from(index.log1p),
+        };
+      });
+      promise.catch(() => rfDecoderCache.delete(key));
+      rfDecoderCache.set(key, promise);
+    }
+    return rfDecoderCache.get(key);
+  }
+
+  function loadRfCounts(path, width, height) {
+    return loadImage(path).then((image) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.drawImage(image, 0, 0);
+      const rgba = context.getImageData(0, 0, width, height).data;
+      const counts = new Uint8Array(width * height);
+      for (let index = 0; index < counts.length; index += 1) counts[index] = rgba[index * 4];
+      return counts;
+    });
+  }
+
   function ensureRfPatches() {
-    if (!state.images || !state.assetPaths?.rfPatches) return Promise.resolve();
-    if (state.rfMeta && state.images.rfPatchSprite && state.images.rfRasters) {
+    if (!state.images || !state.assetPaths?.rfSteps) return Promise.resolve();
+    if (state.rfMeta && state.rfDecoder && state.rfCounts && state.images.rfRasters) {
       drawRfPatch(state.count - 1);
       return Promise.resolve();
     }
     if (state.patchPromise) return state.patchPromise;
     const token = state.loadToken;
-    patchFixation.textContent = "Loading patches…";
-    state.patchPromise = Promise.all([
-      fetch(`${state.assetPaths.rfPatches}?v=${DATA_VERSION}`).then((response) => {
+    const animal = state.animal;
+    patchFixation.textContent = "Loading the decoders…";
+    state.patchPromise = fetch(`${state.assetPaths.rfSteps}?v=${DATA_VERSION}`)
+      .then((response) => {
         if (!response.ok) throw new Error(`Patch metadata returned ${response.status}`);
         return response.json();
-      }),
-      loadImage(state.assetPaths.rfPatchSprite),
-      loadImage(state.assetPaths.rfRasters),
-    ])
-      .then(([meta, sprite, rasters]) => {
+      })
+      .then((meta) =>
+        Promise.all([
+          meta,
+          loadRfDecoder(animal, meta.fold),
+          loadRfCounts(state.assetPaths.rfCounts, meta.units, meta.steps),
+          loadImage(state.assetPaths.rfRasters),
+        ]),
+      )
+      .then(([meta, decoder, counts, rasters]) => {
         if (token !== state.loadToken || !state.images) return;
         state.rfMeta = meta;
-        state.images.rfPatchSprite = sprite;
+        state.rfDecoder = decoder;
+        state.rfCounts = counts;
         state.images.rfRasters = rasters;
+        state.patchPromise = null;
         paint();
       })
       .catch((error) => {
         console.error(error);
-        if (token === state.loadToken) patchFixation.textContent = "Patch unavailable";
+        if (token === state.loadToken) patchFixation.textContent = "Patch decoder unavailable";
       })
       .finally(() => {
         if (token === state.loadToken) state.patchPromise = null;
@@ -2164,6 +2402,10 @@
       state.assetPaths = paths;
       state.patchPromise = null;
       state.rfMeta = null;
+      state.rfCounts = null;
+      state.rfDecoder = null;
+      state.rfChoice = null;
+      state.rfHover = -1;
       applySceneGeometry(scene);
       applyView(scene);
       applyRebuildState(scene);
@@ -2294,6 +2536,51 @@
   });
 
   canvases.truth.addEventListener("pointermove", updateSceneMagnifier);
+  canvases.truth.addEventListener("pointermove", (event) => {
+    if (!isLgn() || !rfFieldsShown()) return;
+    const [x, y] = viewPoint(canvases.truth, event);
+    const hover = rfEntryAtPoint(state.count - 1, x, y);
+    canvases.truth.classList.toggle("over-field", hover >= 0);
+    if (hover !== state.rfHover) {
+      state.rfHover = hover;
+      drawTruth(state.count - 1);
+    }
+  });
+  canvases.truth.addEventListener("pointerleave", () => {
+    if (state.rfHover < 0) return;
+    state.rfHover = -1;
+    canvases.truth.classList.remove("over-field");
+    if (state.scene) drawTruth(state.count - 1);
+  });
+
+  // LGN: a click on a cell's row selects a receptive field that cell belongs to.
+  function rfEntryAtRasterRow(event) {
+    const current = state.count - 1;
+    const geometry = rfRasterGeometry(current);
+    if (!geometry || !state.rfDecoder) return -1;
+    const bounds = canvases.raster.getBoundingClientRect();
+    const unit = Math.floor(((event.clientY - bounds.top) / bounds.height) * geometry.record.cells);
+    const [from, to] = rfRange(current);
+    let best = -1;
+    for (let entry = from; entry < to; entry += 1) {
+      const field = rfField(current, entry);
+      if (!field || !field.members.includes(unit)) continue;
+      if (best < 0 || state.rfMeta.spikes[entry] > state.rfMeta.spikes[best]) best = entry;
+    }
+    return best;
+  }
+
+  canvases.raster.addEventListener("pointermove", (event) => {
+    canvases.raster.classList.toggle("over-field", isLgn() && rfEntryAtRasterRow(event) >= 0);
+  });
+  canvases.raster.addEventListener("click", (event) => {
+    if (!isLgn() || !state.rfMeta) return;
+    const entry = rfEntryAtRasterRow(event);
+    if (entry < 0) return;
+    setPlaying(false);
+    rfChoose(state.count - 1, entry);
+    paint();
+  });
   canvases.truth.addEventListener("pointerleave", hideSceneMagnifier);
 
   canvases.truth.addEventListener("click", async (event) => {
@@ -2301,14 +2588,22 @@
     const selectedScene = state.scene;
     const [x, y] = viewPoint(canvases.truth, event);
     if (isLgn(selectedScene)) {
-      if (!selectedScene.assets?.rfPatches) return;
+      if (!selectedScene.assets?.rfSteps) return;
       setPlaying(false);
       await ensureRfPatches();
-      if (state.scene !== selectedScene) return;
-      const step = bestRfPatchAtPoint(x, y);
-      if (step < 0) return;
-      await setCount(step + 1);
-      setPatchDrawerVisible(true, { scroll: true });
+      if (state.scene !== selectedScene || !state.rfMeta) return;
+      const current = state.count - 1;
+      const here = rfEntryAtPoint(current, x, y);
+      if (here >= 0) {
+        rfChoose(current, here);
+      } else {
+        const step = bestRfStepAtPoint(x, y);
+        if (step < 0) return;
+        await setCount(step + 1);
+        rfChoose(step, rfDefaultEntry(step));
+      }
+      if (patchDrawer.hidden) setPatchDrawerVisible(true, { scroll: true });
+      else paint();
       return;
     }
     const fixation = bestPatchAtPoint(x, y);

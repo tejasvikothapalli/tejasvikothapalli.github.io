@@ -1316,3 +1316,9 @@
 .panel-grid .visual-panel > figcaption {
   flex: 1 0 auto;
 }
+
+/* LGN patch decoder: the scene's receptive-field squares and the raster's rows are clickable */
+#truth-canvas.over-field,
+#raster-canvas.over-field {
+  cursor: pointer;
+}
