@@ -86,7 +86,7 @@
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
     { id: "livingstone", label: "Livingstone data", kind: "Macaques V1 to IT" },
   ];
-  const DATA_VERSION = "20261126-2";
+  const DATA_VERSION = "20261126-3";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -3054,7 +3054,8 @@
       (state.animal === "monkey-c"
         ? " Monkey C saw an earlier color rendering of the photographs, so they look warmer."
         : state.animal === LIVINGSTONE
-          ? " The Livingstone data are 13 macaques recorded from V1 to inferotemporal cortex while they freely viewed pictures (Xiao et al., 2024)."
+          ? " The Livingstone data (Xiao et al., 2024; DANDI 000628) are 13 macaques recorded from V1 to inferotemporal cortex while they " +
+            "freely viewed pictures; about 86% of the recorded population is in central and anterior IT, and V1 and V2 together are 2.4%."
           : "");
     animalGrid.querySelectorAll(".animal-card").forEach((card) => {
       const selected = card.dataset.animal === state.animal;
@@ -3090,11 +3091,13 @@
   const LIV_PLAY_SECONDS = 10;
   const LIV_NOTES = {
     full:
-      "Held out: no decoder saw the picture it reconstructs. The reconstruction is decoded from 1%, 3%, 10% and 30% of the " +
-      "fixations on the picture, pooled across monkeys and sessions, and then from all of them with our best decoder.",
+      "Held out: no decoder saw the picture it reconstructs. The frames are decoded from 1%, 3%, 10% and 30% of the fixations on " +
+      "the picture, pooled across monkeys and sessions, by an earlier decoder; the last frame is our current best decoder, using all of them.",
     faces:
-      "Each face is cut from its picture and decoded from the fixations within 2° of it by a decoder trained on faces. " +
-      "Held out: no decoder saw the face, or any copy of its picture.",
+      "The 100 faces with the most fixations near them: a best case, not a random sample. Each face is cut from its picture at its " +
+      "true location (the decoder is told where the face is) and decoded from the fixations within 2° of it; no decoder saw the face " +
+      "or its picture. Across held-out human faces, the decoded face picks out the right face among 100 for 38% of them in feature " +
+      "space (14% with the spikes zeroed), but it does not recover who the person is (2% against 1%), and it can get the species wrong.",
   };
   const liv = { mode: "full", record: null, original: null, frames: null, position: 1, playing: false, frame: 0, token: 0 };
 
