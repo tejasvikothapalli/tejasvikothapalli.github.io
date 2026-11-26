@@ -10,7 +10,7 @@
     />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
-    <link rel="stylesheet" href="./style.css?v=20261126-7" />
+    <link rel="stylesheet" href="./style.css?v=20261126-8" />
   </head>
   <body>
     <header class="topbar">
@@ -194,7 +194,6 @@
                 height="720"
                 aria-label="Static natural scene. Click a location to inspect its best decoded patch."
               ></canvas>
-              <span class="scene-click-hint">Click to inspect a patch</span>
               <div id="scene-magnifier" class="scene-magnifier" hidden aria-hidden="true">
                 <canvas id="scene-magnifier-canvas" width="112" height="112"></canvas>
               </div>
@@ -478,7 +477,7 @@
           </label>
           <output aria-live="polite">
             <span><small>Fixations used</small><b id="liv-progress-share">all</b></span>
-            <span><small>Viewing time</small><b id="liv-progress-time">0:00 / 0:00</b></span>
+            <span><small id="liv-progress-label">Viewing time</small><b id="liv-progress-time">0:00 / 0:00</b></span>
           </output>
         </div>
         <p id="liv-note" class="liv-note"></p>
@@ -516,6 +515,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20261126-13" defer></script>
+    <script src="./app.js?v=20261126-15" defer></script>
   </body>
 </html>

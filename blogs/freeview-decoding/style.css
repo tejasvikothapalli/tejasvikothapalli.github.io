@@ -403,19 +403,6 @@
   touch-action: manipulation;
 }
 
-.scene-click-hint {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  padding: 4px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  background: rgba(9, 14, 22, 0.72);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 9px;
-  line-height: 1;
-  pointer-events: none;
-}
 
 .scene-magnifier {
   position: absolute;

@@ -829,24 +829,8 @@
     drawHull(context, scene.hull);
     if (current < 0) return;
 
-    const start = scene.trailStart[current];
-    if (current > start) {
-      context.save();
-      context.beginPath();
-      const first = roundedPoint(scene.gaze, start);
-      context.moveTo(first[0], first[1]);
-      for (let index = start + 1; index <= current; index += 1) {
-        const point = roundedPoint(scene.gaze, index);
-        context.lineTo(point[0], point[1]);
-      }
-      context.strokeStyle = colors.trail;
-      context.lineWidth = 4;
-      context.lineCap = "round";
-      context.lineJoin = "round";
-      context.stroke();
-      context.restore();
-    }
-
+    // Only the current eye position: the gaze trail was removed for
+    // simplicity (user, 11-26).
     const [x, y] = roundedPoint(scene.gaze, current);
     if (isLgn(scene)) {
       updateLgnLegend();
@@ -3086,6 +3070,7 @@
   const livTimeline = document.querySelector("#liv-timeline");
   const livShare = document.querySelector("#liv-progress-share");
   const livTime = document.querySelector("#liv-progress-time");
+  const livTimeLabel = document.querySelector("#liv-progress-label");
   const livNote = document.querySelector("#liv-note");
   const livPanels = document.querySelector(".liv-panels");
   const livMapCanvases = [...document.querySelectorAll(".liv-map")];
@@ -3101,12 +3086,8 @@
       "Held out: no decoder saw the picture it reconstructs. The frames are decoded from 1%, 3%, 10% and 30% of the fixations on " +
       "the picture, pooled across monkeys and sessions, by an earlier decoder; the last frame is our current best decoder, using all of them. " +
       "The maps are the decoded features' read-out of people, faces (human or monkey) and monkeys, on a fixed 0 to 1 scale.",
-    faces:
-      "The 100 most-viewed faces of the development split, one per photograph and one per person: a best case, not a random " +
-      "sample. Each face is cut from its picture at its true location (the decoder is told where the face is) and decoded from " +
-      "the fixations within 2° of it. No decoder saw the photograph or any copy of it; some people also appear in other training " +
-      "photographs. Across held-out human faces, the decoded face picks out the right face among 100 for 38% of them in feature " +
-      "space (14% with the spikes zeroed), but it does not recover who the person is (2% against 1%), and it can get the species wrong.",
+    // No caption for faces (user, 11-26: "get rid of this").
+    faces: "",
   };
   const liv = {
     mode: "full", record: null, original: null, frames: null, maps: null, dim: null, tile: null,
@@ -3267,7 +3248,7 @@
     const context = livDecoded.getContext("2d");
     context.fillStyle = "#808080";
     context.fillRect(0, 0, livDecoded.width, livDecoded.height);
-    if (liv.mode === "faces") {
+    if ((record.fractions?.length ?? 1) < 2) {
       context.drawImage(liv.frames, 0, 0, livDecoded.width, livDecoded.height);
       livFrameNote.textContent = "Decoded face";
       return;
@@ -3301,7 +3282,14 @@
     }
     livFrameNote.textContent = index < 0 ? "No fixations decoded yet" : `From ${livPercent(fractions[index])} of the fixations`;
     livShare.textContent = livPercent(t);
-    livTime.textContent = `${formatViewingTime(t * record.viewingSeconds)} / ${formatViewingTime(record.viewingSeconds)}`;
+    // Scenes count viewing time; faces count the fixations near the face.
+    if (record.viewingSeconds) {
+      livTimeLabel.textContent = "Viewing time";
+      livTime.textContent = `${formatViewingTime(t * record.viewingSeconds)} / ${formatViewingTime(record.viewingSeconds)}`;
+    } else {
+      livTimeLabel.textContent = "Fixations";
+      livTime.textContent = `${Math.round(t * record.fixations).toLocaleString()} / ${record.fixations.toLocaleString()}`;
+    }
   }
 
   function livStop() {
@@ -3313,7 +3301,7 @@
   }
 
   function livStart() {
-    if (!liv.record || liv.mode === "faces") return;
+    if (!liv.record || (liv.record.fractions?.length ?? 1) < 2) return;
     if (liv.position >= 1) liv.position = 0;
     liv.playing = true;
     livPlay.textContent = "Pause";
@@ -3348,14 +3336,16 @@
       : `${formatViewingTime(record.viewingSeconds)} of viewing · ${record.fixations.toLocaleString()} fixations · ` +
         `${record.sessions.toLocaleString()} sessions`;
     livOriginalTitle.textContent = faces ? "Face" : "Static natural scene";
-    livTransport.hidden = faces;
+    const ladder = (record.fractions?.length ?? 1) > 1;
+    livTransport.hidden = !ladder;
     livPanels.classList.toggle("is-faces", faces);
     livNote.textContent = LIV_NOTES[liv.mode];
+    livNote.hidden = !LIV_NOTES[liv.mode];
     const root = dataRoot();
     try {
       const [original, frames, maps] = await Promise.all([
         loadImage(`${root}/${record.original}?v=${DATA_VERSION}`),
-        loadImage(`${root}/${faces ? record.frames[0] : record.sprite}?v=${DATA_VERSION}`),
+        loadImage(`${root}/${record.sprite ?? record.frames[0]}?v=${DATA_VERSION}`),
         !faces && record.maps ? loadImage(`${root}/${record.maps}?v=${DATA_VERSION}`) : Promise.resolve(null),
       ]);
       if (token !== liv.token) return;
@@ -3480,7 +3470,7 @@
     if (isLivingstone()) {
       params.set("mode", liv.mode);
       if (liv.record) params.set("scene", liv.record.slug);
-      if (liv.mode === "full") params.set("t", String(Math.round(liv.position * 1000)));
+      if ((liv.record?.fractions?.length ?? 1) > 1) params.set("t", String(Math.round(liv.position * 1000)));
     } else if (state.scene) {
       params.set("scene", state.scene.slug);
       params.set("t", String(state.count));
@@ -3508,7 +3498,7 @@
     try {
       if (isLivingstone()) {
         const t = Number(view.t);
-        if (liv.mode === "full" && Number.isFinite(t)) {
+        if ((liv.record?.fractions?.length ?? 1) > 1 && Number.isFinite(t)) {
           liv.position = Math.max(0, Math.min(1, t / 1000));
           livTimeline.value = String(Math.round(liv.position * 1000));
           livPaint();
