@@ -10,7 +10,7 @@
     />
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="../denoising/style.css?v=20261125-1" />
-    <link rel="stylesheet" href="./style.css?v=20261126-6" />
+    <link rel="stylesheet" href="./style.css?v=20261126-7" />
   </head>
   <body>
     <header class="topbar">
@@ -484,6 +484,12 @@
         <p id="liv-note" class="liv-note"></p>
       </section>
 
+      <div class="share-row">
+        <span id="share-status" class="share-status" aria-live="polite"></span>
+        <input id="share-url" class="share-url" type="text" readonly aria-label="Link to this view" hidden />
+        <button id="share-link" class="quiet-button" type="button">Copy link to this view</button>
+      </div>
+
       <section class="endmatter" aria-label="End matter">
         <div class="endmatter-row" id="acknowledgments">
           <div class="endmatter-title">
@@ -510,6 +516,6 @@
         </div>
       </section>
     </main>
-    <script src="./app.js?v=20261126-11" defer></script>
+    <script src="./app.js?v=20261126-12" defer></script>
   </body>
 </html>

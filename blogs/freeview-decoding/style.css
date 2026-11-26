@@ -1476,3 +1476,41 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Copy a link to the current view (the address bar itself never carries it) */
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.share-row .quiet-button {
+  min-height: 30px;
+  padding: 4px 12px;
+  font-size: 0.88rem;
+}
+
+.share-status {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.share-url {
+  flex: 1 1 260px;
+  max-width: 520px;
+  min-height: 30px;
+  padding: 4px 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.share-url[hidden] {
+  display: none;
+}

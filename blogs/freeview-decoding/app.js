@@ -3375,9 +3375,16 @@
     viewer.hidden = true;
     livViewer.hidden = false;
     sceneMode.hidden = false;
+    const shared = sharedView && !sharedView.sceneTaken ? sharedView : null;
+    if (shared?.mode === "faces" || shared?.mode === "full") liv.mode = shared.mode;
     buildLivGrid();
-    const first = livRecords()[0];
-    if (first) selectLivScene(first);
+    const records = livRecords();
+    let record = records[0];
+    if (shared?.scene) {
+      sharedView.sceneTaken = true;
+      record = records.find((item) => item.slug === shared.scene) || record;
+    }
+    return record ? selectLivScene(record) : Promise.resolve();
   }
 
   function leaveLivingstone() {
@@ -3423,12 +3430,17 @@
     markAnimal();
     if (animal === LIVINGSTONE) {
       setBusy(false);
-      enterLivingstone();
-      return undefined;
+      return enterLivingstone();
     }
     leaveLivingstone();
     buildSceneGrid(manifest);
+    let sharedRecord = null;
+    if (sharedView?.scene && !sharedView.sceneTaken) {
+      sharedView.sceneTaken = true;
+      sharedRecord = manifest.scenes.find((scene) => scene.slug === sharedView.scene) || null;
+    }
     const record =
+      sharedRecord ||
       manifest.scenes.find((scene) => scene.slug === previousSlug) ||
       manifest.scenes.find((scene) => scene.slug === "cornellornithography") ||
       manifest.scenes[0];
@@ -3437,11 +3449,143 @@
     return selectScene(record);
   }
 
+  // Share a view ------------------------------------------------------------
+  // "Copy link to this view" writes the current view into a link. The address
+  // bar never carries state while you interact; opening such a link restores
+  // the view and then removes the parameters from the address bar.
+  const shareButton = document.querySelector("#share-link");
+  const shareStatus = document.querySelector("#share-status");
+  const shareInput = document.querySelector("#share-url");
+  const SHARE_PANELS = {
+    density: () => densityPanel,
+    patch: () => patchDrawer,
+    langevin: () => langevinPanel,
+    fidelity: () => fidelityPanel,
+  };
+
+  function readSharedView() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("monkey")) return null;
+    const view = Object.fromEntries(params.entries());
+    return ANIMALS.some((animal) => animal.id === view.monkey) ? view : null;
+  }
+
+  let sharedView = readSharedView();
+  if (sharedView) state.animal = sharedView.monkey;
+
+  function shareUrl() {
+    const params = new URLSearchParams();
+    params.set("monkey", state.animal);
+    if (isLivingstone()) {
+      params.set("mode", liv.mode);
+      if (liv.record) params.set("scene", liv.record.slug);
+      if (liv.mode === "full") params.set("t", String(Math.round(liv.position * 1000)));
+    } else if (state.scene) {
+      params.set("scene", state.scene.slug);
+      params.set("t", String(state.count));
+      const panels = Object.keys(SHARE_PANELS).filter((name) => !SHARE_PANELS[name]().hidden);
+      if (panels.length) params.set("panels", panels.join(","));
+      if (!fidelityPanel.hidden) params.set("metric", fidelityMetric.value);
+      if (!langevinPanel.hidden) {
+        params.set("sampler", [langevinEta.value, langevinTemperature.value, langevinSnr.value].join(","));
+      }
+      if (isLgn() && state.rfChoice) params.set("field", `${state.rfChoice.session}:${state.rfChoice.gid}`);
+    }
+    return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  }
+
+  function setInput(input, value) {
+    if (!Number.isFinite(value)) return;
+    input.value = String(value);
+    input.dispatchEvent(new Event("input"));
+  }
+
+  async function applySharedView() {
+    const view = sharedView;
+    sharedView = null;
+    if (!view) return;
+    try {
+      if (isLivingstone()) {
+        const t = Number(view.t);
+        if (liv.mode === "full" && Number.isFinite(t)) {
+          liv.position = Math.max(0, Math.min(1, t / 1000));
+          livTimeline.value = String(Math.round(liv.position * 1000));
+          livPaint();
+        }
+      } else if (state.scene) {
+        const t = Number(view.t);
+        if (Number.isFinite(t)) await setCount(t);
+        const panels = new Set((view.panels || "").split(",").filter(Boolean));
+        if (view.sampler) {
+          const [eta, temperature, snr] = view.sampler.split(",").map(Number);
+          setInput(langevinEta, eta);
+          setInput(langevinTemperature, temperature);
+          setInput(langevinSnr, snr);
+        }
+        if (panels.has("density") && densityPanel.hidden) densityToggle.click();
+        if (panels.has("langevin") && langevinPanel.hidden && !langevinToggle.hidden) setLangevinVisible(true);
+        if (panels.has("fidelity") && fidelityPanel.hidden && !fidelityToggle.hidden) setFidelityVisible(true);
+        if (view.metric && [...fidelityMetric.options].some((option) => option.value === view.metric)) {
+          fidelityMetric.value = view.metric;
+          fidelityMetric.dispatchEvent(new Event("change"));
+        }
+        if (view.field && isLgn()) {
+          const [session, gid] = view.field.split(":").map(Number);
+          if (Number.isFinite(session) && Number.isFinite(gid)) state.rfChoice = { session, gid };
+        }
+        if (panels.has("patch") && patchDrawer.hidden && !patchToggle.hidden) setPatchDrawerVisible(true);
+        else paint();
+      }
+      // A shared scene beyond the first two rows: show all, so it is visible.
+      const card = grid.querySelector(".scene-card.is-selected");
+      if (card && !card.offsetParent) {
+        grid.classList.remove("is-collapsed");
+        updateSceneToggle();
+      }
+      (isLivingstone() ? livViewer : viewer).scrollIntoView({ block: "start" });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
+    }
+  }
+
+  shareButton.addEventListener("click", async () => {
+    const url = shareUrl();
+    shareButton.dataset.url = url;
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    window.clearTimeout(state.shareTimer);
+    if (copied) {
+      shareInput.hidden = true;
+      shareStatus.textContent = "Link copied";
+      state.shareTimer = window.setTimeout(() => {
+        shareStatus.textContent = "";
+      }, 2500);
+    } else {
+      // No clipboard access (an older browser or a blocked permission): show
+      // the link, selected, to copy by hand.
+      shareInput.hidden = false;
+      shareInput.value = url;
+      shareInput.focus();
+      shareInput.select();
+      shareStatus.textContent = "Copy this link:";
+    }
+  });
+
   Promise.all(ANIMALS.map((animal) => loadAnimalManifest(animal.id).catch(() => null)))
     .then(() => {
       buildAnimalPicker();
       return selectAnimal(state.animal, { initial: true });
     })
+    .then(applySharedView)
     .catch((error) => {
       console.error(error);
       sceneCount.textContent = "Scenes unavailable";
