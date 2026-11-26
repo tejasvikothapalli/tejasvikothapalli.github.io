@@ -1437,6 +1437,14 @@
   white-space: nowrap;
 }
 
+/* Standalone buttons size to their text: the 116-px phone cap is for the
+   viewer's row of toggles only. */
+.scene-more .quiet-button,
+.scene-mode .quiet-button,
+.share-row .quiet-button {
+  max-width: none;
+}
+
 @media (max-width: 900px) {
   .liv-panels {
     grid-template-columns: repeat(3, minmax(0, 1fr));
