@@ -86,7 +86,7 @@
     { id: "monkey-c", label: "Monkey C", kind: "Macaque LGN" },
     { id: "livingstone", label: "Livingstone data", kind: "Macaques V1 to IT" },
   ];
-  const DATA_VERSION = "20261126-5";
+  const DATA_VERSION = "20261126-6";
 
   const state = {
     animal: ANIMALS[0].id,
@@ -3280,7 +3280,9 @@
         livDrawMap(canvas, values);
       });
     }
-    livFrameNote.textContent = index < 0 ? "No fixations decoded yet" : `From ${livPercent(fractions[index])} of the fixations`;
+    // A rung's own share, exactly (12.5%, not 13%).
+    const rung = (share) => (share >= 1 ? "all" : `${Number((share * 100).toFixed(1))}%`);
+    livFrameNote.textContent = index < 0 ? "No fixations decoded yet" : `From ${rung(fractions[index])} of the fixations`;
     livShare.textContent = livPercent(t);
     // Scenes count viewing time; faces count the fixations near the face.
     if (record.viewingSeconds) {
